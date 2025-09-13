@@ -1,0 +1,80 @@
+[project]
+name = "llm-native-pipeline-spikes"
+version = "0.1.0"
+description = "LLM-native pipeline spikes"
+requires-python = ">=3.14"
+dependencies = [
+    "numpy>=2.3.3",
+    "pandas>=2.3.2",
+    "spike1_rss_to_duckdb",
+]
+
+[tool.uv.workspace]
+members = ["spikes/*"]
+
+[tool.uv.sources]
+spike1_rss_to_duckdb = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "httpx>=0.28.1",
+    "ipykernel>=6.30.1",
+    "isort>=6.0.1",
+    "python-dotenv>=1.1.1",
+    "ruff>=0.12.9",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | build
+  | dist
+  | migrations
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [
+  ".venv",
+  "build",
+  "dist",
+]
+fix = true
+show-fixes = true
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "I", "B", "W",    # basic linting & style
+  "UP",                       # upgrade Python syntax
+  "N",                        # pep8-naming
+  "SIM",                      # simplify
+  "C4",                       # comprehensions
+  "TID",                      # tidy imports
+]
+ignore = [
+  "E501",  # line length (handled by Black)
+  "W292",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["api", "poller"]
+skip = [".venv", "build", "dist"]
