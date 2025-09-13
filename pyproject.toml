@@ -2,11 +2,12 @@
 name = "llm-native-pipeline-spikes"
 version = "0.1.0"
 description = "LLM-native pipeline spikes"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     "numpy>=2.3.3",
     "pandas>=2.3.2",
     "spike1_rss_to_duckdb",
+    "spike2_asr_timestamps",
 ]
 
 [tool.uv.workspace]
@@ -14,6 +15,7 @@ members = ["spikes/*"]
 
 [tool.uv.sources]
 spike1_rss_to_duckdb = { workspace = true }
+spike2_asr_timestamps = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.8.17,<0.9.0"]

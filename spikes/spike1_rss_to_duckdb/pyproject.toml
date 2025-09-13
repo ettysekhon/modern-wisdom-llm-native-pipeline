@@ -2,7 +2,7 @@
 name = "spike1_rss_to_duckdb"
 version = "0.1.0"
 description = "A spike to ingest RSS feeds into DuckDB"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 
 dependencies = [
   "dlt>=1.16,<2.0",
