@@ -4,8 +4,11 @@ version = "0.1.0"
 description = "LLM-native pipeline spikes"
 requires-python = ">=3.13"
 dependencies = [
+    "assemblyai>=0.43.1",
+    "faster-whisper>=1.2.0",
     "numpy>=2.3.3",
     "pandas>=2.3.2",
+    "pyarrow>=21.0.0",
     "spike1_rss_to_duckdb",
     "spike2_asr_timestamps",
 ]
