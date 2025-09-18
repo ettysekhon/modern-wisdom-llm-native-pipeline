@@ -201,7 +201,11 @@ def transcribe_assemblyai(audio_url: str) -> tuple[list[dict], str]:
 
     cfg = aai.TranscriptionConfig(
         punctuate=True,
-        speaker_labels=ASR_DIARIZATION,  # enable diarization if requested
+        speaker_labels=True,  # enable diarization if requested
+        speaker_options={
+            "min_speakers": 1,
+            "max_speakers": 10,
+        },
     )
     tx = aai.Transcriber().transcribe(audio_url, config=cfg)
 
