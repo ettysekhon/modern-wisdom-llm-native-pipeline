@@ -5,12 +5,16 @@ description = "LLM-native pipeline spikes"
 requires-python = ">=3.13"
 dependencies = [
     "assemblyai>=0.43.1",
+    "duckdb>=1.3.2",
     "faster-whisper>=1.2.0",
+    "ipython>=9.5.0",
+    "jupyter>=1.1.1",
     "numpy>=2.3.3",
     "pandas>=2.3.2",
     "pyarrow>=21.0.0",
     "spike1_rss_to_duckdb",
     "spike2_asr_timestamps",
+    "spike3_chunking_and_metadata",
 ]
 
 [tool.uv.workspace]
@@ -19,6 +23,7 @@ members = ["spikes/*"]
 [tool.uv.sources]
 spike1_rss_to_duckdb = { workspace = true }
 spike2_asr_timestamps = { workspace = true }
+spike3_chunking_and_metadata = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.8.17,<0.9.0"]
