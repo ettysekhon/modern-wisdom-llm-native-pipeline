@@ -181,3 +181,4 @@ cython_debug/
 
 # Artifacts
 data/duckdb/*.duckdb
+data/_backup/
