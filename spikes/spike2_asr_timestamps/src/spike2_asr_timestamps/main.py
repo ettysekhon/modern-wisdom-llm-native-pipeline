@@ -8,6 +8,7 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 
+import assemblyai as aai
 import duckdb
 import pandas as pd
 import requests
@@ -194,8 +195,6 @@ def transcribe_assemblyai(audio_url: str) -> tuple[list[dict], str]:
     api_key = os.environ.get("ASSEMBLYAI_API_KEY")
     if not api_key:
         raise RuntimeError("ASSEMBLYAI_API_KEY is not set")
-
-    import assemblyai as aai
 
     aai.settings.api_key = api_key
 

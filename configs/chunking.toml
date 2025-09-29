@@ -1,0 +1,3 @@
+method = "sentence_bound"
+size_tokens = 700
+overlap_tokens = 100

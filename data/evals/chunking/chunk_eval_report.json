@@ -1,0 +1,35 @@
+{
+  "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43",
+  "k": 20,
+  "tolerance_s": 7,
+  "methods": {
+    "fixed": {
+      "Hit@5": 0.0,
+      "Hit@10": 0.5,
+      "Hit@20": 0.5,
+      "MRR": 0.0625,
+      "AvgTimeDistanceSec": 75.08000000000001,
+      "AvgTokens": 681.1224489795918,
+      "AvgDurationSec": 162.7561224489795
+    },
+    "sentence_bound": {
+      "Hit@5": 0.0,
+      "Hit@10": 0.5,
+      "Hit@20": 0.5,
+      "MRR": 0.0625,
+      "AvgTimeDistanceSec": 75.08000000000001,
+      "AvgTokens": 611.7575757575758,
+      "AvgDurationSec": 147.0887727272727
+    },
+    "time_window": {
+      "Hit@5": 0.0,
+      "Hit@10": 0.5,
+      "Hit@20": 0.5,
+      "MRR": 0.05,
+      "AvgTimeDistanceSec": 91.05950000000001,
+      "AvgTokens": 790.92,
+      "AvgDurationSec": 189.08038
+    }
+  },
+  "winner": "sentence_bound"
+}

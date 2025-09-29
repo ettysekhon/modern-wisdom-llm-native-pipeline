@@ -5,6 +5,9 @@ description = "Chunking and metadata spike"
 requires-python = ">=3.13"
 dependencies = [
     "blingfire>=0.1.8",
+    "duckdb>=1.4.0",
+    "jsonschema>=4.25.1",
+    "matplotlib>=3.10.6",
     "numpy>=2.3.3",
     "pandas>=2.3.2",
     "pyarrow>=21.0.0",
@@ -13,6 +16,12 @@ dependencies = [
     "rapidfuzz>=3.14.1",
     "rich>=14.1.0",
     "tiktoken>=0.11.0",
+    "tomli-w>=1.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
 ]
 
 [project.scripts]

@@ -176,6 +176,7 @@ cython_debug/
 
 # Other files
 *.DS_Store
+NOTES.md
 
 .dlt/
 

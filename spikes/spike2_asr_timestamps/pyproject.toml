@@ -4,12 +4,13 @@ version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
   "faster-whisper>=1.0.0",
-  "duckdb>=1.0.0",
+  "duckdb==1.4.0",
   "pandas>=2.2",
   "pyarrow>=16",
   "jiwer>=3.0.5",
   "soundfile>=0.12",
-  "requests>=2.32"
+  "requests>=2.32",
+  "assemblyai>=0.43.1",
 ]
 
 [project.scripts]
