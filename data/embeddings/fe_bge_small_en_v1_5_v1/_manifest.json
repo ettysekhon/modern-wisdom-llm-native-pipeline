@@ -1,0 +1,14 @@
+{
+  "provider": "fastembed",
+  "model_id": "BAAI/bge-small-en-v1.5",
+  "emb_v": "fe_bge_small_en_v1_5_v1",
+  "normalized": true,
+  "dim": 384,
+  "episodes": [
+    {
+      "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43",
+      "rows": 66,
+      "parquet": "data/embeddings/fe_bge_small_en_v1_5_v1/episode_id=0a4fa77e-bc0f-11ef-bab6-3f37b4906b43/part-00000.snappy.parquet"
+    }
+  ]
+}

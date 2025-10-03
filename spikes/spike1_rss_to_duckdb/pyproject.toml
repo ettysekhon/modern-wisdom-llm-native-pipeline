@@ -8,6 +8,7 @@ dependencies = [
   "dlt>=1.16,<2.0",
   "duckdb==1.4.0",
   "feedparser>=6.0.12",
+  "ipython>=9.5.0",
   "python-dateutil>=2.9.0.post0",
 ]
 

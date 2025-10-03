@@ -1,0 +1,21 @@
+{
+  "emb_v": "openai_t3small_v1",
+  "dim": 1536,
+  "provider": "openai",
+  "model_id": "text-embedding-3-small",
+  "created_at": 1759407445,
+  "episodes": [
+    {
+      "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43",
+      "parquet": "/Users/ettyekhon/code/src/petroineos/petroineos-related/modern-wisdom-llm-native-pipeline/data/embeddings/openai_t3small_v1/episode_id=0a4fa77e-bc0f-11ef-bab6-3f37b4906b43/part-00000.snappy.parquet",
+      "rows": 66,
+      "sum_tokens": 40376,
+      "sha256": "46e44472625de899fe24fd04ed093d49b07bbde38d29a30835a2e78513299c25"
+    }
+  ],
+  "prep": {
+    "method": "sentence_bound",
+    "size_tokens": 700,
+    "overlap_tokens": 100
+  }
+}

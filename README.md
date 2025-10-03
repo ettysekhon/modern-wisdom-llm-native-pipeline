@@ -247,4 +247,11 @@ Config updated → configs/chunking.toml
 
 The [decision report](/docs/decisions/03-chunking.md) summarises the results and the winner. Visualisations summarising the results have also been created in the [spike3_validation.ipynb](/spikes/spike3_chunking_and_metadata/notebooks/spike3_validation.ipynb) notebook.
 
-Yes please do and let's do it similar to spike 3 splitting files where it makes sense rather than having monolithic script with tests and it should it be easier to fix when bite size approach is taken with update to small script or function
+###  Unit Tests for Spike 3
+
+```bash
+uv sync --all-extras
+uv run pytest -q
+```
+
+5 passed in 0.17s

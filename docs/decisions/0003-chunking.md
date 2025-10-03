@@ -1,7 +1,7 @@
 # Decision Record — Chunking & Metadata (Spike 3)
 
 Date: 2025-09-30
-Owner: Etty Sekhon
+Owner: ettysekhon
 
 ## Context
 

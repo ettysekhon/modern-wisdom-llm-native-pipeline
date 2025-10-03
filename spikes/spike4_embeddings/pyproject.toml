@@ -1,0 +1,30 @@
+[project]
+name = "spike4_embeddings"
+version = "0.1.0"
+description = "Embeddings spike"
+requires-python = ">=3.13"
+dependencies = [
+    "duckdb>=1.4.0",
+    "numpy>=2.3.3",
+    "pandas>=2.3.2",
+    "pyarrow>=21.0.0",
+    "rich>=14.1.0",
+    "tiktoken>=0.11.0",
+    "openai>=2.0.0",
+    "ipython>=9.5.0",
+    "ipykernel>=6.30.1",
+    "fastembed>=0.7.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+run-spike4 = "spike4_embeddings.main:main"
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"
+
