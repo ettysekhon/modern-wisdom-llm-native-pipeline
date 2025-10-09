@@ -18,6 +18,7 @@ members = [
     "spike3-chunking-and-metadata",
     "spike4-embeddings",
     "spike5-qdrant",
+    "spike6-retrieval",
 ]
 
 [[package]]
@@ -1421,6 +1422,7 @@ dependencies = [
     { name = "spike1-rss-to-duckdb" },
     { name = "spike2-asr-timestamps" },
     { name = "spike3-chunking-and-metadata" },
+    { name = "spike6-retrieval" },
 ]
 
 [package.dev-dependencies]
@@ -1446,6 +1448,7 @@ requires-dist = [
     { name = "spike1-rss-to-duckdb", editable = "spikes/spike1_rss_to_duckdb" },
     { name = "spike2-asr-timestamps", editable = "spikes/spike2_asr_timestamps" },
     { name = "spike3-chunking-and-metadata", editable = "spikes/spike3_chunking_and_metadata" },
+    { name = "spike6-retrieval", editable = "spikes/spike6_retrieval" },
 ]
 
 [package.metadata.requires-dev]
@@ -2977,6 +2980,36 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "pandas", specifier = ">=2.3.2" },
+    { name = "pyarrow", specifier = ">=21.0.0" },
+    { name = "pytest", specifier = ">=8.4.2" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "qdrant-client", specifier = ">=1.15.1" },
+    { name = "rich", specifier = ">=14.1.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "spike6-retrieval"
+version = "0.1.0"
+source = { editable = "spikes/spike6_retrieval" }
+dependencies = [
+    { name = "fastembed" },
+    { name = "pandas" },
+    { name = "pyarrow" },
+    { name = "pytest" },
+    { name = "qdrant-client" },
+    { name = "rich" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastembed", specifier = ">=0.7.3" },
     { name = "pandas", specifier = ">=2.3.2" },
     { name = "pyarrow", specifier = ">=21.0.0" },
     { name = "pytest", specifier = ">=8.4.2" },

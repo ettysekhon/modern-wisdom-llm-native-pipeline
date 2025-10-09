@@ -1,0 +1,26 @@
+[project]
+name = "spike6_retrieval"
+version = "0.1.0"
+description = "Retrieval spike"
+requires-python = ">=3.13"
+dependencies = [
+    "fastembed>=0.7.3",
+    "pandas>=2.3.2",
+    "pyarrow>=21.0.0",
+    "pytest>=8.4.2",
+    "qdrant-client>=1.15.1",
+    "rich>=14.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+run-spike6 = "spike6_retrieval.main:main"
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"
+

@@ -1,0 +1,29 @@
+{
+  "summary": {
+    "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43",
+    "emb_v": "fe_bge_small_en_v1_5_v1",
+    "collection": "mw_chunks_live",
+    "ks": [
+      5,
+      10,
+      20
+    ],
+    "tolerance_s": 7,
+    "top_k_search": 20,
+    "provider": "fastembed",
+    "model_id": "BAAI/bge-small-en-v1.5",
+    "n_queries": 2,
+    "metrics": {
+      "Hit@5": 0.0,
+      "Hit@10": 0.0,
+      "Hit@20": 0.0,
+      "MRR": 0.0,
+      "p95_latency_ms": 7.002773247586447,
+      "n": 2.0
+    }
+  },
+  "per_query_latency_ms": [
+    7.182916997408029,
+    3.580042000976391
+  ]
+}
