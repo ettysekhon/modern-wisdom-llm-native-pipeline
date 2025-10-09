@@ -16,6 +16,7 @@ dependencies = [
     "spike2_asr_timestamps",
     "spike3_chunking_and_metadata",
     "spike6_retrieval",
+    "spike7_hybrid",
 ]
 
 
@@ -27,6 +28,7 @@ spike1_rss_to_duckdb = { workspace = true }
 spike2_asr_timestamps = { workspace = true }
 spike3_chunking_and_metadata = { workspace = true }
 spike6_retrieval = { workspace = true }
+spike7_hybrid = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.8.17,<0.9.0"]

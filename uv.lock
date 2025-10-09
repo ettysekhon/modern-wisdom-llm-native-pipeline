@@ -19,6 +19,7 @@ members = [
     "spike4-embeddings",
     "spike5-qdrant",
     "spike6-retrieval",
+    "spike7-hybrid",
 ]
 
 [[package]]
@@ -1423,6 +1424,7 @@ dependencies = [
     { name = "spike2-asr-timestamps" },
     { name = "spike3-chunking-and-metadata" },
     { name = "spike6-retrieval" },
+    { name = "spike7-hybrid" },
 ]
 
 [package.dev-dependencies]
@@ -1449,6 +1451,7 @@ requires-dist = [
     { name = "spike2-asr-timestamps", editable = "spikes/spike2_asr_timestamps" },
     { name = "spike3-chunking-and-metadata", editable = "spikes/spike3_chunking_and_metadata" },
     { name = "spike6-retrieval", editable = "spikes/spike6_retrieval" },
+    { name = "spike7-hybrid", editable = "spikes/spike7_hybrid" },
 ]
 
 [package.metadata.requires-dev]
@@ -3015,6 +3018,38 @@ requires-dist = [
     { name = "pytest", specifier = ">=8.4.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "qdrant-client", specifier = ">=1.15.1" },
+    { name = "rich", specifier = ">=14.1.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "spike7-hybrid"
+version = "0.1.0"
+source = { editable = "spikes/spike7_hybrid" }
+dependencies = [
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "pyarrow" },
+    { name = "pytest" },
+    { name = "qdrant-client" },
+    { name = "rank-bm25" },
+    { name = "rich" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.3.3" },
+    { name = "pandas", specifier = ">=2.3.2" },
+    { name = "pyarrow", specifier = ">=21.0.0" },
+    { name = "pytest", specifier = ">=8.4.2" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "qdrant-client", specifier = ">=1.15.1" },
+    { name = "rank-bm25", specifier = ">=0.2.2" },
     { name = "rich", specifier = ">=14.1.0" },
 ]
 provides-extras = ["dev"]

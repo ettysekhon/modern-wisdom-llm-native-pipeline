@@ -1,0 +1,27 @@
+[project]
+name = "spike7_hybrid"
+version = "0.1.0"
+description = "Hybrid search spike"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.3.3",
+    "pandas>=2.3.2",
+    "pyarrow>=21.0.0",
+    "pytest>=8.4.2",
+    "qdrant-client>=1.15.1",
+    "rank-bm25>=0.2.2",
+    "rich>=14.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+run-spike7 = "spike7_hybrid.main:main"
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"
+
