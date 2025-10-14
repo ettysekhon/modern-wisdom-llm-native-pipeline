@@ -1,0 +1,103 @@
+{
+  "answer": {
+    "items": [
+      {
+        "title": "It is 100 books that you should read",
+        "summary": "It is 100 books that you should read. Read before youe Die.",
+        "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43",
+        "timestamp": 7965.32
+      },
+      {
+        "title": "Appreciate you",
+        "summary": "Appreciate you. If you are looking for new reading suggestions, look no further than the Modern Wisdom Reading list.",
+        "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43",
+        "timestamp": 7958.16
+      },
+      {
+        "title": "Thanks for having me man",
+        "summary": "Thanks for having me man. Appreciate you.",
+        "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43",
+        "timestamp": 7957.36
+      }
+    ]
+  },
+  "citations": [
+    "0974dcb5-54db-558d-a550-f42c0037af90",
+    "0ad278cb-26f7-5222-9ebb-e613ed29430c",
+    "e4380ed5-c86d-59f2-bbd8-f274565425c3"
+  ],
+  "trace_id": "9b504429-bb62-4aa2-b02e-26fe00dfc032",
+  "timings": {
+    "retrieve_ms": 11.814875004347414,
+    "generate_ms": 0.0
+  },
+  "cost": {},
+  "model_id": "gpt-4o-mini",
+  "index_version": "mw_chunks_live",
+  "retrieved": [
+    {
+      "chunk_id": "0974dcb5-54db-558d-a550-f42c0037af90",
+      "start_ts": 7965.32,
+      "end_ts": 7984.83,
+      "score": 0.57171214,
+      "text": "It is 100 books that you should read. Read before youe Die. The most interesting, life changing and impactful books I've ever read with descriptions about why I like them and links to go and buy them. And you can get it right now for free by going to ChrisWillX.com books that's ChrisWillX.com books.",
+      "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43"
+    },
+    {
+      "chunk_id": "0ad278cb-26f7-5222-9ebb-e613ed29430c",
+      "start_ts": 7958.16,
+      "end_ts": 7984.83,
+      "score": 0.57123697,
+      "text": "Appreciate you. If you are looking for new reading suggestions, look no further than the Modern Wisdom Reading list. It is 100 books that you should read. Read before youe Die. The most interesting, life changing and impactful books I've ever read with descriptions about why I like them and links to go and buy them. And you can get it right now for free by going to ChrisWillX.com books that's ChrisWillX.com books.",
+      "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43"
+    },
+    {
+      "chunk_id": "e4380ed5-c86d-59f2-bbd8-f274565425c3",
+      "start_ts": 7957.36,
+      "end_ts": 7984.83,
+      "score": 0.56412864,
+      "text": "Thanks for having me man. Appreciate you. If you are looking for new reading suggestions, look no further than the Modern Wisdom Reading list. It is 100 books that you should read. Read before youe Die. The most interesting, life changing and impactful books I've ever read with descriptions about why I like them and links to go and buy them. And you can get it right now for free by going to ChrisWillX.com books that's ChrisWillX.com books.",
+      "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43"
+    },
+    {
+      "chunk_id": "92455c7f-f501-5d78-a05c-f86ed47808dc",
+      "start_ts": 7960.92,
+      "end_ts": 7984.83,
+      "score": 0.56356543,
+      "text": "If you are looking for new reading suggestions, look no further than the Modern Wisdom Reading list. It is 100 books that you should read. Read before youe Die. The most interesting, life changing and impactful books I've ever read with descriptions about why I like them and links to go and buy them. And you can get it right now for free by going to ChrisWillX.com books that's ChrisWillX.com books.",
+      "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43"
+    },
+    {
+      "chunk_id": "e24d6b44-6963-50c6-a586-30cbbdb04046",
+      "start_ts": 7956.8,
+      "end_ts": 7984.83,
+      "score": 0.5605197,
+      "text": "Thanks so much. Thanks for having me man. Appreciate you. If you are looking for new reading suggestions, look no further than the Modern Wisdom Reading list. It is 100 books that you should read. Read before youe Die. The most interesting, life changing and impactful books I've ever read with descriptions about why I like them and links to go and buy them. And you can get it right now for free by going to ChrisWillX.com books that's ChrisWillX.com books.",
+      "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43"
+    },
+    {
+      "chunk_id": "3521dc12-e60f-5598-8d07-c908ffafbf0f",
+      "start_ts": 7974.67,
+      "end_ts": 7984.83,
+      "score": 0.55759054,
+      "text": "And you can get it right now for free by going to ChrisWillX.com books that's ChrisWillX.com books.",
+      "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43"
+    },
+    {
+      "chunk_id": "e7c7bb37-ad7a-5f1f-a698-b5f1a9950b65",
+      "start_ts": 7967.31,
+      "end_ts": 7984.83,
+      "score": 0.548027,
+      "text": "Read before youe Die. The most interesting, life changing and impactful books I've ever read with descriptions about why I like them and links to go and buy them. And you can get it right now for free by going to ChrisWillX.com books that's ChrisWillX.com books.",
+      "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43"
+    },
+    {
+      "chunk_id": "3b22f0ae-1ce2-51e8-8906-bdcd26138654",
+      "start_ts": 7968.27,
+      "end_ts": 7984.83,
+      "score": 0.54257405,
+      "text": "The most interesting, life changing and impactful books I've ever read with descriptions about why I like them and links to go and buy them. And you can get it right now for free by going to ChrisWillX.com books that's ChrisWillX.com books.",
+      "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43"
+    }
+  ]
+}

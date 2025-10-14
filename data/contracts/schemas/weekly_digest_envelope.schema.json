@@ -1,0 +1,113 @@
+{
+  "type": "object",
+  "required": [
+    "answer",
+    "citations",
+    "trace_id",
+    "timings",
+    "cost",
+    "model_id",
+    "index_version",
+    "retrieved"
+  ],
+  "properties": {
+    "answer": {
+      "type": "object",
+      "required": [
+        "items"
+      ],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "title",
+              "summary"
+            ],
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "episode_id": {
+                "type": "string"
+              },
+              "timestamp": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "trace_id": {
+      "type": "string"
+    },
+    "timings": {
+      "type": "object",
+      "properties": {
+        "retrieve_ms": {
+          "type": "number"
+        },
+        "generate_ms": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "retrieve_ms",
+        "generate_ms"
+      ],
+      "additionalProperties": true
+    },
+    "cost": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "model_id": {
+      "type": "string"
+    },
+    "index_version": {
+      "type": "string"
+    },
+    "retrieved": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "chunk_id",
+          "score"
+        ],
+        "properties": {
+          "chunk_id": {
+            "type": "string"
+          },
+          "start_ts": {
+            "type": "number"
+          },
+          "end_ts": {
+            "type": "number"
+          },
+          "score": {
+            "type": "number"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

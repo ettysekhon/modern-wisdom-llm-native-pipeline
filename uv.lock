@@ -20,6 +20,7 @@ members = [
     "spike5-qdrant",
     "spike6-retrieval",
     "spike7-hybrid",
+    "spike8-rag-contract",
 ]
 
 [[package]]
@@ -1425,6 +1426,7 @@ dependencies = [
     { name = "spike3-chunking-and-metadata" },
     { name = "spike6-retrieval" },
     { name = "spike7-hybrid" },
+    { name = "spike8-rag-contract" },
 ]
 
 [package.dev-dependencies]
@@ -1452,6 +1454,7 @@ requires-dist = [
     { name = "spike3-chunking-and-metadata", editable = "spikes/spike3_chunking_and_metadata" },
     { name = "spike6-retrieval", editable = "spikes/spike6_retrieval" },
     { name = "spike7-hybrid", editable = "spikes/spike7_hybrid" },
+    { name = "spike8-rag-contract", editable = "spikes/spike8_rag_contract" },
 ]
 
 [package.metadata.requires-dev]
@@ -3050,6 +3053,42 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "qdrant-client", specifier = ">=1.15.1" },
     { name = "rank-bm25", specifier = ">=0.2.2" },
+    { name = "rich", specifier = ">=14.1.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "spike8-rag-contract"
+version = "0.1.0"
+source = { editable = "spikes/spike8_rag_contract" }
+dependencies = [
+    { name = "fastembed" },
+    { name = "jsonschema" },
+    { name = "numpy" },
+    { name = "openai" },
+    { name = "pandas" },
+    { name = "pyarrow" },
+    { name = "pytest" },
+    { name = "qdrant-client" },
+    { name = "rich" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastembed", specifier = ">=0.7.2" },
+    { name = "jsonschema", specifier = ">=4.25.1" },
+    { name = "numpy", specifier = ">=2.3.3" },
+    { name = "openai", specifier = ">=2.0.0" },
+    { name = "pandas", specifier = ">=2.3.2" },
+    { name = "pyarrow", specifier = ">=21.0.0" },
+    { name = "pytest", specifier = ">=8.4.2" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.2.0" },
+    { name = "qdrant-client", specifier = ">=1.15.1" },
     { name = "rich", specifier = ">=14.1.0" },
 ]
 provides-extras = ["dev"]

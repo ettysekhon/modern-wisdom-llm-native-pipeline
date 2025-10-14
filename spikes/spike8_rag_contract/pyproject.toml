@@ -1,0 +1,26 @@
+[project]
+name = "spike8_rag_contract"
+version = "0.1.0"
+description = "Spike 8 RAG contract (sync, CLI only)"
+requires-python = ">=3.13"
+dependencies = [
+  "fastembed>=0.7.2",
+  "numpy>=2.3.3",
+  "pandas>=2.3.2",
+  "pyarrow>=21.0.0",
+  "pytest>=8.4.2",
+  "qdrant-client>=1.15.1",
+  "jsonschema>=4.25.1",
+  "rich>=14.1.0",
+  "openai>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2.0"]
+
+[project.scripts]
+run-spike8 = "spike8_rag_contract.main:main"
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"

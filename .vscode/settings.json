@@ -23,6 +23,7 @@
     "spikes/spike5_qdrant/src",
     "spikes/spike6_retrieval/src",
     "spikes/spike7_hybrid/src",
+    "spikes/spike8_rag_contract/src",
   ],
   "cursorpyright.analysis.extraPaths": [
     "spikes/spike1_rss_to_duckdb/src",
@@ -32,5 +33,6 @@
     "spikes/spike5_qdrant/src",
     "spikes/spike6_retrieval/src",
     "spikes/spike7_hybrid/src",
+    "spikes/spike8_rag_contract/src",
   ]
 }
