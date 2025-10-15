@@ -1,0 +1,16 @@
+
+[project]
+name = "spike10_eval_automation"
+version = "0.1.0"
+description = "Spike 10: Eval Automation"
+requires-python = ">=3.13"
+dependencies = [
+    "pyyaml>=6.0.2",
+]
+
+[project.scripts]
+run-spike10 = "spike10_eval_automation.main:main"
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"

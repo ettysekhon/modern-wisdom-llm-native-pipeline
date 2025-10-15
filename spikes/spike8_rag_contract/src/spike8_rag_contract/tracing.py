@@ -28,7 +28,7 @@ def get_tracer():
     tp = register(
         protocol="http/protobuf",
         project_name=project_name,
-        use_batch=True,
+        # NOTE: do not pass use_batch or other version-specific kwargs here
     )
     _tracer = tp.get_tracer("mw.rag")
     return _tracer

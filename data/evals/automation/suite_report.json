@@ -1,0 +1,36 @@
+{
+  "suite_name": "mw-daily-smoke",
+  "outputs": [
+    {
+      "type": "baseline",
+      "Hit@5": 0.0,
+      "Hit@10": 0.0,
+      "Hit@20": 0.0,
+      "MRR": 0.0,
+      "p95_latency_ms": null,
+      "n": 2.0,
+      "path": "/Users/ettyekhon/code/src/petroineos/petroineos-related/modern-wisdom-llm-native-pipeline/data/evals/retrieval/retrieval_baseline.json"
+    },
+    {
+      "type": "hybrid",
+      "Hit@5": 0.5,
+      "Hit@10": 1.0,
+      "Hit@20": 1.0,
+      "MRR": 0.1875,
+      "p95_latency_ms": 4.828777052171063,
+      "path": "/Users/ettyekhon/code/src/petroineos/petroineos-related/modern-wisdom-llm-native-pipeline/data/evals/retrieval/retrieval_hybrid.json"
+    },
+    {
+      "type": "contract",
+      "has_answer": true,
+      "retrieved": 8,
+      "path": "/Users/ettyekhon/code/src/petroineos/petroineos-related/modern-wisdom-llm-native-pipeline/data/contracts/sample_responses/sample_answer.json"
+    }
+  ],
+  "thresholds": {
+    "min_hit_at_10_hybrid": 0.5,
+    "min_hit_at_10_baseline": 0.0,
+    "max_p95_ms": 250,
+    "require_contract_answer": true
+  }
+}

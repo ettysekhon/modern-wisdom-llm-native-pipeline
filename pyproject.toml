@@ -15,9 +15,12 @@ dependencies = [
     "spike1_rss_to_duckdb",
     "spike2_asr_timestamps",
     "spike3_chunking_and_metadata",
+    "spike4_embeddings",
+    "spike5_qdrant",
     "spike6_retrieval",
     "spike7_hybrid",
     "spike8_rag_contract",
+    "spike10_eval_automation",
 ]
 
 
@@ -28,9 +31,12 @@ members = ["spikes/*"]
 spike1_rss_to_duckdb = { workspace = true }
 spike2_asr_timestamps = { workspace = true }
 spike3_chunking_and_metadata = { workspace = true }
+spike4_embeddings = { workspace = true }
+spike5_qdrant = { workspace = true }
 spike6_retrieval = { workspace = true }
 spike7_hybrid = { workspace = true }
 spike8_rag_contract = { workspace = true }
+spike10_eval_automation = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.8.17,<0.9.0"]

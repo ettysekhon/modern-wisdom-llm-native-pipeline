@@ -1,0 +1,19 @@
+name: mw-daily-smoke
+thresholds:
+  min_hit_at_10_hybrid: 0.5
+  min_hit_at_10_baseline: 0.0
+  max_p95_ms: 250
+  require_contract_answer: true
+jobs:
+  - kind: baseline
+    episode_id: 0a4fa77e-bc0f-11ef-bab6-3f37b4906b43
+    emb_v: fe_bge_small_en_v1_5_v1
+    method: sentence_bound
+  - kind: hybrid
+    episode_id: 0a4fa77e-bc0f-11ef-bab6-3f37b4906b43
+    emb_v: fe_bge_small_en_v1_5_v1
+    method: sentence_bound
+  - kind: contract
+    episode_id: 0a4fa77e-bc0f-11ef-bab6-3f37b4906b43
+    emb_v: fe_bge_small_en_v1_5_v1
+    method: sentence_bound

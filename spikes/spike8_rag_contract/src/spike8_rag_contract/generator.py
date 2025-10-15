@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 
@@ -13,33 +14,67 @@ def _mock_generate(question: str, context: str) -> str:
 
 def _openai_generate(question: str, context: str, model_id: str) -> str:
     client = get_openai_client()
+
     system = (
         "You are a precise assistant. Answer using ONLY the provided context. "
         "Be concise and cite chunk ids if relevant (e.g. [chunk:XXXX])."
     )
     user = f"Question:\n{question}\n\nContext:\n{context}"
+
+    # simple trunc for previews in Phoenix
+    def _short(s: str, n: int = 1000) -> str:
+        s = s or ""
+        return s if len(s) <= n else s[: n - 1] + "…"
+
     with start_span("llm.openai.chat", kind="LLM", attrs={"llm.model_name": model_id}) as span:
-        resp = client.chat.completions.create(
-            model=model_id,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-            temperature=0.0,
-            max_tokens=500,
-        )
-        out = resp.choices[0].message.content or ""
-        # Best-effort token/cost attrs if present
+        # OpenInference-friendly attributes
+        with contextlib.suppress(Exception):
+            span.set_attribute("openinference.span.kind", "LLM")
+        span.set_attribute("llm.provider", "openai")
+        span.set_attribute("llm.model_id", model_id)
+        span.set_attribute("input.value", _short(user, 2000))
+
         try:
+            resp = client.chat.completions.create(
+                model=model_id,
+                messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+                temperature=0.0,
+                max_tokens=500,
+            )
+            out = resp.choices[0].message.content or ""
+
+            # token usage (best-effort)
             usage = getattr(resp, "usage", None)
             if usage:
-                span.set_attribute(
-                    "llm.usage.prompt_tokens", int(getattr(usage, "prompt_tokens", 0))
-                )
-                span.set_attribute(
-                    "llm.usage.completion_tokens", int(getattr(usage, "completion_tokens", 0))
-                )
-                span.set_attribute("llm.usage.total_tokens", int(getattr(usage, "total_tokens", 0)))
-        except Exception:
-            pass
-        return out
+                prompt_toks = int(getattr(usage, "prompt_tokens", 0) or 0)
+                comp_toks = int(getattr(usage, "completion_tokens", 0) or 0)
+                total_toks = int(getattr(usage, "total_tokens", prompt_toks + comp_toks) or 0)
+                span.set_attribute("llm.usage.prompt_tokens", prompt_toks)
+                span.set_attribute("llm.usage.completion_tokens", comp_toks)
+                span.set_attribute("llm.usage.total_tokens", total_toks)
+
+                # optional: rough cost estimator (update prices as needed)
+                prices_usd = {
+                    # per 1K tokens
+                    "gpt-4o-mini": {"input": 0.0005, "output": 0.0015},
+                }
+                price = prices_usd.get(model_id)
+                if price:
+                    cost = (prompt_toks / 1000.0) * price["input"] + (comp_toks / 1000.0) * price[
+                        "output"
+                    ]
+                    span.set_attribute("llm.cost.usd", float(cost))
+
+            span.set_attribute("output.value", _short(out, 2000))
+            return out
+
+        except Exception as err:
+            # make failures visible in Phoenix
+            try:
+                span.record_exception(err)
+                span.set_attribute("error", True)
+            finally:
+                raise err
 
 
 def generate_answer(

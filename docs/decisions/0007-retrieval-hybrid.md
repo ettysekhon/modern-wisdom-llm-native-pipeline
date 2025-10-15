@@ -6,7 +6,6 @@
 - filters: {'guest': None, 'date_from': None, 'date_to': None}
 
 ## Metrics
-
 ```json
 {
   "Hit@5": 0.5,
@@ -15,5 +14,4 @@
   "MRR": 0.1875
 }
 ```
-
-- p95_latency_ms: 3.75
+- p95_latency_ms: 4.83
