@@ -1,0 +1,14 @@
+services:
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    ports:
+      - 6006:6006
+      - 4317:4317
+      - 9090:9090 # Optional for Prometheus
+    environment:
+      - PHOENIX_WORKING_DIR=/mnt/data
+    volumes:
+      - phoenix_data:/mnt/data
+volumes:
+  phoenix_data:
+    driver: local

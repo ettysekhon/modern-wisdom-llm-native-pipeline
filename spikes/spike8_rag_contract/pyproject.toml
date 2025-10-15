@@ -17,6 +17,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.2.0"]
+monitoring = [
+    "arize-phoenix>=12.6.0",
+    "openinference-semantic-conventions>=0.1.24",
+    "opentelemetry-api>=1.37.0",
+    "opentelemetry-sdk>=1.37.0",
+]
 
 [project.scripts]
 run-spike8 = "spike8_rag_contract.main:main"

@@ -11,7 +11,7 @@ from rich.console import Console
 from tiktoken import get_encoding
 
 from . import paths
-from .generator import generate_answer, generate_guest_summary
+from .generator import generate_answer, generate_guest_summary  # if used
 from .io import load_chunks_df
 from .qdrant import client, vector_search
 from .retrieval import embed_question_fastembed
@@ -21,6 +21,9 @@ from .schema import (
     WEEKLY_DIGEST_ENVELOPE_SCHEMA,
     write_schemas,
 )
+from .tracing import get_tracer, start_span
+
+tracer = get_tracer()
 
 console = Console()
 
@@ -54,28 +57,38 @@ def _build_context_and_citations(
 def _retrieval_common(args):
     query_text = getattr(args, "question", None) or getattr(args, "prompt", None) or "summary"
 
-    cli = client(paths.QDRANT_URL, paths.QDRANT_API_KEY)
-    q_vec = embed_question_fastembed(query_text, model_id=args.query_model_id)
+    with start_span("retrieve", kind="RETRIEVER") as span:
+        span.set_attribute("rag.phase", "retrieve")
+        span.set_attribute("rag.index_version", paths.INDEX_VERSION)
+        span.set_attribute("rag.episode_id", args.episode_id)
+        span.set_attribute("rag.emb_v", args.emb_v)
+        span.set_attribute("retrieval.top_k", int(args.top_k))
+        span.set_attribute("input.value", query_text)
 
-    docs, rt_ms = vector_search(
-        cli,
-        collection=paths.INDEX_VERSION,
-        episode_id=args.episode_id,
-        q_vector=q_vec,
-        top_k=args.top_k,
-    )
+        cli = client(paths.QDRANT_URL, paths.QDRANT_API_KEY)
+        q_vec = embed_question_fastembed(query_text, model_id=args.query_model_id)
 
-    chunks_df = load_chunks_df(args.method, args.episode_id)
-    pld_map = {str(row["chunk_id"]): row.to_dict() for _, row in chunks_df.iterrows()}
+        t0 = time.perf_counter()
+        docs, rt_ms = vector_search(
+            cli,
+            collection=paths.INDEX_VERSION,
+            episode_id=args.episode_id,
+            q_vector=q_vec,
+            top_k=args.top_k,
+        )
+        span.set_attribute("latency.ms", (time.perf_counter() - t0) * 1000.0)
+        span.set_attribute("retrieval.latency.ms", float(rt_ms))
 
-    retrieved = []
-    for d in docs:
-        did = d["id"] if isinstance(d, dict) else getattr(d, "id", None)
-        score = d["score"] if isinstance(d, dict) else getattr(d, "score", None)
-        cid = str(did)
-        row = pld_map.get(cid, {}) or {}
-        retrieved.append(
-            {
+        chunks_df = load_chunks_df(args.method, args.episode_id)
+        pld_map = {str(row["chunk_id"]): row.to_dict() for _, row in chunks_df.iterrows()}
+
+        retrieved = []
+        for i, d in enumerate(docs):
+            did = d["id"] if isinstance(d, dict) else getattr(d, "id", None)
+            score = d["score"] if isinstance(d, dict) else getattr(d, "score", None)
+            cid = str(did)
+            row = pld_map.get(cid, {}) or {}
+            item = {
                 "chunk_id": cid,
                 "start_ts": float(row.get("start_ts", 0.0)),
                 "end_ts": float(row.get("end_ts", 0.0)),
@@ -83,52 +96,73 @@ def _retrieval_common(args):
                 "text": row.get("text", ""),
                 "episode_id": row.get("episode_id", args.episode_id),
             }
-        )
+            retrieved.append(item)
+
+            # annotate top results succinctly
+            prefix = f"retrieval.documents.{i}.document"
+            span.set_attribute(f"{prefix}.id", cid)
+            span.set_attribute(f"{prefix}.score", item["score"])
+            if i < 5:  # keep attributes small
+                preview = (item["text"] or "")[:300]
+                span.set_attribute(f"{prefix}.content", preview)
+
+        span.set_attribute("retrieval.documents.count", int(len(retrieved)))
 
     return retrieved, rt_ms, pld_map
 
 
 def cmd_guest_summary(args) -> None:
-    # Retrieval
-    retrieved, rt_ms, _ = _retrieval_common(args)
-    context, citations = _build_context_and_citations(retrieved, max_ctx_tokens=args.max_ctx_tokens)
+    with start_span("rag.guest_summary", kind="CHAIN") as span:
+        span.set_attribute("rag.phase", "pipeline")
+        span.set_attribute("rag.index_version", paths.INDEX_VERSION)
+        span.set_attribute("rag.episode_id", args.episode_id)
+        span.set_attribute("llm.provider", args.llm_provider)
+        span.set_attribute("llm.model_id", args.llm_model_id)
 
-    # Generation
-    import time
-    import uuid
+        retrieved, rt_ms, _ = _retrieval_common(args)
+        context, citations = _build_context_and_citations(
+            retrieved, max_ctx_tokens=args.max_ctx_tokens
+        )
 
-    t0 = time.perf_counter()
-    body = generate_guest_summary(
-        question=args.question,
-        context=context,
-        provider=args.llm_provider,
-        model_id=args.llm_model_id,
-    )
-    gen_ms = (time.perf_counter() - t0) * 1000.0
+        with start_span("generate", kind="LLM") as gspan:
+            gspan.set_attribute("llm.provider", args.llm_provider)
+            gspan.set_attribute("llm.model_id", args.llm_model_id)
+            t0 = time.perf_counter()
+            body = generate_guest_summary(
+                question=args.question,
+                context=context,
+                provider=args.llm_provider,
+                model_id=args.llm_model_id,
+            )
+            gen_ms = (time.perf_counter() - t0) * 1000.0
+            gspan.set_attribute("latency.ms", gen_ms)
 
-    env = {
-        "answer": body,
-        "citations": citations,
-        "trace_id": str(uuid.uuid4()),
-        "timings": {"retrieve_ms": rt_ms, "generate_ms": gen_ms},
-        "cost": {},
-        "model_id": args.llm_model_id,
-        "index_version": paths.INDEX_VERSION,
-        "retrieved": retrieved,
-    }
+        env = {
+            "answer": body,
+            "citations": citations,
+            "trace_id": str(uuid.uuid4()),
+            "timings": {"retrieve_ms": rt_ms, "generate_ms": gen_ms},
+            "cost": {},
+            "model_id": args.llm_model_id,
+            "index_version": paths.INDEX_VERSION,
+            "retrieved": retrieved,
+        }
 
-    # Validate against envelope schema
-    try:
-        validate(instance=env, schema=GUEST_SUMMARY_ENVELOPE_SCHEMA)
-    except ValidationError as e:
-        console.print(f"[red]Schema validation failed:[/red] {e.message}")
-        raise SystemExit(1) from e
+        with start_span("validate", kind="VALIDATOR") as vspan:
+            try:
+                validate(instance=env, schema=GUEST_SUMMARY_ENVELOPE_SCHEMA)
+                vspan.set_attribute("validation.ok", True)
+            except ValidationError as e:
+                vspan.set_attribute("validation.ok", False)
+                vspan.record_exception(e)
+                console.print(f"[red]Schema validation failed:[/red] {e.message}")
+                raise SystemExit(1) from e
 
-    # Write
-    out = paths.SAMPLES_DIR / "sample_guest_summary.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(env, indent=2))
-    console.print(f"[green]OK →[/green] {out}")
+        out = paths.SAMPLES_DIR / "sample_guest_summary.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(env, indent=2))
+        span.set_attribute("output.path", str(out))
+        console.print(f"[green]OK →[/green] {out}")
 
 
 def _first_sentence(text: str) -> str:
@@ -175,62 +209,68 @@ def _is_near_duplicate(a: str, b: str, thresh: float = 0.9) -> bool:
 
 
 def cmd_weekly_digest(args: Namespace) -> None:
-    """Create a 3-item digest (mock/OpenAI) with strict envelope."""
-    import jsonschema
+    with start_span("rag.weekly_digest", kind="CHAIN") as span:
+        span.set_attribute("rag.phase", "pipeline")
+        span.set_attribute("rag.index_version", paths.INDEX_VERSION)
+        span.set_attribute("rag.episode_id", args.episode_id)
+        span.set_attribute("llm.provider", args.llm_provider)
+        span.set_attribute("llm.model_id", args.llm_model_id)
 
-    retrieved, rt_ms, _pld = _retrieval_common(args)
+        retrieved, rt_ms, _ = _retrieval_common(args)
 
-    # Build citations from top-3 chunk_ids (strings)
-    citations = [r["chunk_id"] for r in retrieved[:3]]
+        # Build citations from top-3 chunk_ids
+        citations = [r["chunk_id"] for r in retrieved[:3]]
 
-    # Build items deterministically from retrieved snippets
-    items = []
-    for r in retrieved:
-        txt = (r.get("text") or "").strip()
-        if not txt:
-            continue
-        # dedupe
-        if any(_is_near_duplicate(txt, it["summary"]) for it in items):
-            continue
+        # Deterministic digest from retrieved (your current logic)
+        items = []
+        for r in retrieved:
+            txt = (r.get("text") or "").strip()
+            if not txt:
+                continue
+            if any(_is_near_duplicate(txt, it["summary"]) for it in items):
+                continue
+            items.append(
+                {
+                    "title": _first_sentence(txt)[:120],
+                    "summary": _two_sentence_summary(txt, max_words=80),
+                    "episode_id": args.episode_id,
+                    "timestamp": float(r.get("start_ts", 0.0)),
+                }
+            )
+            if len(items) >= 3:
+                break
 
-        items.append(
-            {
-                "title": _first_sentence(txt)[:120],
-                "summary": _two_sentence_summary(txt, max_words=80),
-                "episode_id": args.episode_id,
-                "timestamp": float(r.get("start_ts", 0.0)),
-            }
-        )
-        if len(items) >= 3:
-            break
+        while len(items) < 3:
+            items.append(
+                {"title": "", "summary": "", "episode_id": args.episode_id, "timestamp": 0.0}
+            )
 
-    # If <3, pad deterministically
-    while len(items) < 3:
-        items.append({"title": "", "summary": "", "episode_id": args.episode_id, "timestamp": 0.0})
+        env = {
+            "answer": {"items": items},
+            "citations": citations,
+            "trace_id": str(uuid.uuid4()),
+            "timings": {"retrieve_ms": rt_ms, "generate_ms": 0.0},
+            "cost": {},
+            "model_id": args.llm_model_id,
+            "index_version": paths.INDEX_VERSION,
+            "retrieved": retrieved,
+        }
 
-    # Envelope
-    env = {
-        "answer": {"items": items},
-        "citations": citations,
-        "trace_id": str(uuid.uuid4()),
-        "timings": {"retrieve_ms": rt_ms, "generate_ms": 0.0},
-        "cost": {},
-        "model_id": args.llm_model_id,
-        "index_version": paths.INDEX_VERSION,
-        "retrieved": retrieved,
-    }
+        with start_span("validate", kind="VALIDATOR") as vspan:
+            try:
+                validate(env, WEEKLY_DIGEST_ENVELOPE_SCHEMA)
+                vspan.set_attribute("validation.ok", True)
+            except ValidationError as err:
+                vspan.set_attribute("validation.ok", False)
+                vspan.record_exception(err)
+                console.print(f"[red]Schema validation failed:[/red] {err.message}")
+                raise SystemExit(1) from err
 
-    # Validate strictly against weekly-digest schema
-    try:
-        jsonschema.validate(instance=env, schema=WEEKLY_DIGEST_ENVELOPE_SCHEMA)
-    except jsonschema.ValidationError as err:
-        console.print(f"[red]Schema validation failed:[/red] {err.message}")
-        raise SystemExit(1) from err
-
-    out = paths.CONTRACTS_DIR / "sample_responses" / "sample_weekly_digest.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(env, indent=2))
-    console.print(f"[green]OK →[/green] {out}")
+        out = paths.CONTRACTS_DIR / "sample_responses" / "sample_weekly_digest.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(env, indent=2))
+        span.set_attribute("output.path", str(out))
+        console.print(f"[green]OK →[/green] {out}")
 
 
 def cmd_dump_schemas(_args: Namespace) -> None:
@@ -240,82 +280,71 @@ def cmd_dump_schemas(_args: Namespace) -> None:
 
 
 def cmd_run(args: Namespace) -> None:
-    # 1) Embed the question with FastEmbed
-    q_vec = embed_question_fastembed(args.question, model_id=args.query_model_id)
+    with start_span("rag.run", kind="CHAIN") as span:
+        span.set_attribute("rag.phase", "pipeline")
+        span.set_attribute("rag.index_version", paths.INDEX_VERSION)
+        span.set_attribute("rag.episode_id", args.episode_id)
+        span.set_attribute("rag.emb_v", args.emb_v)
+        span.set_attribute("rag.method", args.method)
+        span.set_attribute("llm.provider", args.llm_provider)
+        span.set_attribute("llm.model_id", args.llm_model_id)
+        span.set_attribute("retrieval.top_k", int(args.top_k))
 
-    # 2) Vector search in Qdrant
-    cli = client(paths.QDRANT_URL, paths.QDRANT_API_KEY)
-    docs, rt_ms = vector_search(
-        cli,
-        collection=paths.INDEX_VERSION,
-        episode_id=args.episode_id,
-        q_vector=q_vec,
-        top_k=args.top_k,
-    )
+        # 1) Retrieve
+        retrieved, rt_ms, _ = _retrieval_common(args)
 
-    # 3) Map chunk payloads (timestamps, text) for enrichment
-    chunks_df = load_chunks_df(args.method, args.episode_id)
-    pld_map = {row["chunk_id"]: row for _, row in chunks_df.iterrows()}
-
-    # Qdrant result items can be dict-like or object-like; access safely
-    def _get(obj, key, default=None):
-        if isinstance(obj, dict):
-            return obj.get(key, default)
-        return getattr(obj, key, default)
-
-    retrieved = []
-    for d in docs:
-        cid = str(_get(d, "id", ""))
-        score = float(_get(d, "score", 0.0))
-        p = pld_map.get(cid, {})
-        retrieved.append(
-            {
-                "chunk_id": cid,
-                "start_ts": _to_float(p.get("start_ts", 0.0)),
-                "end_ts": _to_float(p.get("end_ts", 0.0)),
-                "score": score,
-                "text": p.get("text", ""),
-            }
+        # 2) Context
+        context, citations = _build_context_and_citations(
+            retrieved, max_ctx_tokens=args.max_ctx_tokens
+        )
+        span.set_attribute(
+            "context.tokens.approx", len(get_encoding("cl100k_base").encode(context))
         )
 
-    # 4) Build context + citations
-    context, citations = _build_context_and_citations(retrieved, max_ctx_tokens=args.max_ctx_tokens)
+        # 3) Generate
+        with start_span("generate", kind="LLM") as gspan:
+            gspan.set_attribute("llm.provider", args.llm_provider)
+            gspan.set_attribute("llm.model_id", args.llm_model_id)
+            t0 = time.perf_counter()
+            answer_text = generate_answer(
+                question=args.question,
+                context=context,
+                citations=citations,
+                provider=args.llm_provider,
+                model_id=args.llm_model_id,
+            )
+            gen_ms = (time.perf_counter() - t0) * 1000.0
+            gspan.set_attribute("latency.ms", gen_ms)
+            gspan.set_attribute("citations.count", len(citations))
 
-    # 5) Generate answer (mock or OpenAI) and measure
-    tg0 = time.perf_counter()
-    answer_text = generate_answer(
-        question=args.question,
-        context=context,
-        citations=citations,
-        provider=args.llm_provider,
-        model_id=args.llm_model_id,
-    )
-    gen_ms = (time.perf_counter() - tg0) * 1000.0
+        # 4) Envelope + validate
+        env = {
+            "answer": answer_text,
+            "citations": citations,
+            "trace_id": str(uuid.uuid4()),
+            "timings": {"retrieve_ms": rt_ms, "generate_ms": gen_ms},
+            "cost": {},
+            "model_id": args.llm_model_id,
+            "index_version": paths.INDEX_VERSION,
+            "retrieved": retrieved,
+        }
 
-    # 6) Envelope (schema-validated)
-    env = {
-        "answer": answer_text,
-        "citations": citations,
-        "trace_id": str(uuid.uuid4()),
-        "timings": {"retrieve_ms": rt_ms, "generate_ms": gen_ms},
-        "cost": {},
-        "model_id": args.llm_model_id,
-        "index_version": paths.INDEX_VERSION,
-        "retrieved": retrieved,
-    }
+        with start_span("validate", kind="VALIDATOR") as vspan:
+            try:
+                validate(instance=env, schema=ANSWER_ENVELOPE_SCHEMA)
+                vspan.set_attribute("validation.ok", True)
+            except ValidationError as e:
+                vspan.set_attribute("validation.ok", False)
+                vspan.record_exception(e)
+                console.print(f"[red]Schema validation failed:[/red] {e.message}")
+                raise SystemExit(1) from e
 
-    # 7) Validate against the Answer envelope schema
-    try:
-        validate(instance=env, schema=ANSWER_ENVELOPE_SCHEMA)
-    except ValidationError as e:
-        console.print(f"[red]Schema validation failed:[/red] {e.message}")
-        raise SystemExit(1) from None
-
-    # 8) Write output
-    out = paths.CONTRACTS_DIR / "sample_responses" / "sample_answer.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(env, indent=2))
-    console.print(f"[green]OK →[/green] {out}")
+        # 5) Write
+        out = paths.CONTRACTS_DIR / "sample_responses" / "sample_answer.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(env, indent=2))
+        span.set_attribute("output.path", str(out))
+        console.print(f"[green]OK →[/green] {out}")
 
 
 def build_parser() -> ArgumentParser:

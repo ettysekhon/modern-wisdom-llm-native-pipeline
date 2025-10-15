@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from .models import get_openai_client
+from .tracing import start_span
 
 
 def _mock_generate(question: str, context: str) -> str:
@@ -12,19 +13,33 @@ def _mock_generate(question: str, context: str) -> str:
 
 def _openai_generate(question: str, context: str, model_id: str) -> str:
     client = get_openai_client()
-
     system = (
         "You are a precise assistant. Answer using ONLY the provided context. "
         "Be concise and cite chunk ids if relevant (e.g. [chunk:XXXX])."
     )
     user = f"Question:\n{question}\n\nContext:\n{context}"
-    resp = client.chat.completions.create(
-        model=model_id,
-        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-        temperature=0.0,
-        max_tokens=500,
-    )
-    return resp.choices[0].message.content or ""
+    with start_span("llm.openai.chat", kind="LLM", attrs={"llm.model_name": model_id}) as span:
+        resp = client.chat.completions.create(
+            model=model_id,
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+            temperature=0.0,
+            max_tokens=500,
+        )
+        out = resp.choices[0].message.content or ""
+        # Best-effort token/cost attrs if present
+        try:
+            usage = getattr(resp, "usage", None)
+            if usage:
+                span.set_attribute(
+                    "llm.usage.prompt_tokens", int(getattr(usage, "prompt_tokens", 0))
+                )
+                span.set_attribute(
+                    "llm.usage.completion_tokens", int(getattr(usage, "completion_tokens", 0))
+                )
+                span.set_attribute("llm.usage.total_tokens", int(getattr(usage, "total_tokens", 0)))
+        except Exception:
+            pass
+        return out
 
 
 def generate_answer(
@@ -34,10 +49,10 @@ def generate_answer(
     provider: str = "mock",
     model_id: str = "gpt-4o-mini",
 ) -> str:
-    """Return plain text answer; caller wraps into the contract envelope."""
     p = provider.lower()
     if p == "mock":
-        return _mock_generate(question, context)
+        with start_span("llm.mock", kind="LLM", attrs={"llm.model_name": "mock"}):
+            return _mock_generate(question, context)
     if p == "openai":
         return _openai_generate(question, context, model_id=model_id)
     raise ValueError(f"Unsupported llm provider: {provider}")
