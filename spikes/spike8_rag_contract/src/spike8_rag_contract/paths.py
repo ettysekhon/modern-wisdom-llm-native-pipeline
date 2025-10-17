@@ -15,6 +15,7 @@ SAMPLES_DIR = CONTRACTS_DIR / "sample_responses"
 EVALS_DIR = DATA_DIR / "evals" / "rag"
 CHUNKS_DIR = DATA_DIR / "chunks"
 EMB_DIR = DATA_DIR / "embeddings"
+DUCKDB_PATH = DATA_DIR / "duckdb" / "modern_wisdom.duckdb"
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")

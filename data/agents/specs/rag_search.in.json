@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "required": [
+    "question",
+    "episode_id",
+    "top_k",
+    "scope"
+  ],
+  "properties": {
+    "question": {
+      "type": "string"
+    },
+    "episode_id": {
+      "type": "string"
+    },
+    "top_k": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "episode",
+        "corpus",
+        "auto"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

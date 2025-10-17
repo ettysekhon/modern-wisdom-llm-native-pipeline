@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "required": [
+    "segments"
+  ],
+  "properties": {
+    "segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "episode_id",
+          "start_ts",
+          "end_ts",
+          "text"
+        ],
+        "properties": {
+          "episode_id": {
+            "type": "string"
+          },
+          "start_ts": {
+            "type": "number"
+          },
+          "end_ts": {
+            "type": "number"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}

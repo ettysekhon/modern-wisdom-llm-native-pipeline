@@ -19,6 +19,7 @@ members = [
     "llm-native-pipeline-spikes",
     "spike1-rss-to-duckdb",
     "spike10-eval-automation",
+    "spike11-agent",
     "spike2-asr-timestamps",
     "spike3-chunking-and-metadata",
     "spike4-embeddings",
@@ -1772,6 +1773,7 @@ dependencies = [
     { name = "pyarrow" },
     { name = "spike1-rss-to-duckdb" },
     { name = "spike10-eval-automation" },
+    { name = "spike11-agent" },
     { name = "spike2-asr-timestamps" },
     { name = "spike3-chunking-and-metadata" },
     { name = "spike4-embeddings" },
@@ -1803,6 +1805,7 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=21.0.0" },
     { name = "spike1-rss-to-duckdb", editable = "spikes/spike1_rss_to_duckdb" },
     { name = "spike10-eval-automation", editable = "spikes/spike10_eval_automation" },
+    { name = "spike11-agent", editable = "spikes/spike11_agent" },
     { name = "spike2-asr-timestamps", editable = "spikes/spike2_asr_timestamps" },
     { name = "spike3-chunking-and-metadata", editable = "spikes/spike3_chunking_and_metadata" },
     { name = "spike4-embeddings", editable = "spikes/spike4_embeddings" },
@@ -3470,6 +3473,11 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "pyyaml", specifier = ">=6.0.2" }]
+
+[[package]]
+name = "spike11-agent"
+version = "0.1.0"
+source = { editable = "spikes/spike11_agent" }
 
 [[package]]
 name = "spike2-asr-timestamps"

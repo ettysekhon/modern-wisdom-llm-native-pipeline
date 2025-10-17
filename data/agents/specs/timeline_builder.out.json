@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "required": [
+    "timeline"
+  ],
+  "properties": {
+    "timeline": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "episode_id",
+          "t0",
+          "t1",
+          "summary"
+        ],
+        "properties": {
+          "episode_id": {
+            "type": "string"
+          },
+          "t0": {
+            "type": "number"
+          },
+          "t1": {
+            "type": "number"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

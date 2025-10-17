@@ -14,5 +14,5 @@ def rrf_fuse(rankings: dict[str, list[str]], k: float = 60.0) -> list[tuple[str,
     return sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
 
-def top_ids_by_score(items: list[dict[str, Any]], n: int) -> list[str]:
-    return [d["id"] for d in sorted(items, key=lambda x: x["score"], reverse=True)[:n]]
+def top_ids_by_score(items: list[Any], n: int) -> list[str]:
+    return [d.id for d in sorted(items, key=lambda x: x.score, reverse=True)[:n]]

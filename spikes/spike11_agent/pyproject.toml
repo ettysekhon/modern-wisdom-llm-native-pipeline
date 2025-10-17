@@ -1,0 +1,15 @@
+
+[project]
+name = "spike11_agent"
+version = "0.1.0"
+description = "Spike 11: Agent"
+requires-python = ">=3.13"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"
+
+[project.scripts]
+run-spike11 = "spike11_agent.main:main"
+

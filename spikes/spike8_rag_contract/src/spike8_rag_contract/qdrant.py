@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Sequence
 from typing import Any
 
 from qdrant_client import QdrantClient
@@ -24,9 +23,9 @@ def _episode_filter(episode_id: str) -> Filter:
 def vector_search(
     cli: QdrantClient,
     collection: str,
-    episode_id: str,
-    q_vector: Sequence[float],
-    top_k: int = 8,
+    q_vector: list[float],
+    top_k: int = 20,
+    episode_id: str | None = None,
 ) -> tuple[list[Any], float]:
     with start_span(
         "retrieve.qdrant",
@@ -38,12 +37,23 @@ def vector_search(
         },
     ) as span:
         t0 = time.perf_counter()
+
+        flt = None
+        if episode_id:
+            from qdrant_client.http.models import FieldCondition, Filter, MatchValue
+
+            flt = Filter(
+                must=[FieldCondition(key="episode_id", match=MatchValue(value=episode_id))]
+            )
+
         res = cli.search(
             collection_name=collection,
             query_vector=q_vector,
             limit=top_k,
-            query_filter=_episode_filter(episode_id),
+            query_filter=flt,  # None → no episode filter (corpus-wide)
             with_payload=True,
+            with_vectors=False,
+            score_threshold=None,
         )
         rt_ms = (time.perf_counter() - t0) * 1000.0
         # annotate results (scores + ids, trimmed)
@@ -55,4 +65,4 @@ def vector_search(
                 span.set_attribute(f"{prefix}.score", float(getattr(p, "score", 0.0)))
         except Exception:
             pass
-        return list(res), rt_ms
+        return res, rt_ms

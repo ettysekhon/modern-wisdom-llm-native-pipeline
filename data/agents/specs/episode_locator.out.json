@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "required": [
+    "episodes"
+  ],
+  "properties": {
+    "episodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "episode_id",
+          "title",
+          "guest",
+          "headline",
+          "description"
+        ],
+        "properties": {
+          "episode_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "guest": {
+            "type": "string"
+          },
+          "headline": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -24,6 +24,8 @@
     "spikes/spike6_retrieval/src",
     "spikes/spike7_hybrid/src",
     "spikes/spike8_rag_contract/src",
+    "spikes/spike10_eval_automation/src",
+    "spikes/spike11_agent/src",
   ],
   "cursorpyright.analysis.extraPaths": [
     "spikes/spike1_rss_to_duckdb/src",
@@ -34,5 +36,7 @@
     "spikes/spike6_retrieval/src",
     "spikes/spike7_hybrid/src",
     "spikes/spike8_rag_contract/src",
+    "spikes/spike10_eval_automation/src",
+    "spikes/spike11_agent/src",
   ]
 }

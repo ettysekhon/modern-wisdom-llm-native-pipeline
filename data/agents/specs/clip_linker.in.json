@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "required": [
+    "episode_id",
+    "timestamp"
+  ],
+  "properties": {
+    "episode_id": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "number"
+    }
+  },
+  "additionalProperties": false
+}

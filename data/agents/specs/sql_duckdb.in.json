@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "required": [
+    "sql"
+  ],
+  "properties": {
+    "sql": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

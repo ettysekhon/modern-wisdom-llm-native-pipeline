@@ -1,0 +1,56 @@
+{
+  "type": "object",
+  "required": [
+    "retrieved",
+    "retrieve_ms",
+    "fallback_used",
+    "scope"
+  ],
+  "properties": {
+    "retrieved": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "chunk_id",
+          "score",
+          "text",
+          "episode_id",
+          "start_ts",
+          "end_ts"
+        ],
+        "properties": {
+          "chunk_id": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "text": {
+            "type": "string"
+          },
+          "episode_id": {
+            "type": "string"
+          },
+          "start_ts": {
+            "type": "number"
+          },
+          "end_ts": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "retrieve_ms": {
+      "type": "number"
+    },
+    "fallback_used": {
+      "type": "boolean"
+    },
+    "scope": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}
