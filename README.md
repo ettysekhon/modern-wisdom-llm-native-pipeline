@@ -1,591 +1,286 @@
-# LLM Native Pipeline Spikes
+# Modern Wisdom – LLM Native Pipeline
 
-A series of spikes exploring how to build an LLM-native data pipeline, using [Chris Williamson's *Modern Wisdom* podcast](https://chriswillx.com/podcast/) as the dataset.
+## Motivation and Context
 
-## Getting Started
+This project applies retrieval-augmented generation (RAG) techniques to *Modern Wisdom*, a long-form podcast hosted by Chris Williamson.
+The motivation came from wanting to make multi-hour episodes **searchable, comparable, and summarised** through natural language questions.
 
-Install dependencies with [uv](https://docs.astral.sh/uv/):
+Modern Wisdom covers deep topics – philosophy, self-improvement, science, and culture – but most insights are locked inside audio.
+The aim was to build an **LLM-native pipeline** that transforms raw audio into a structured, queryable knowledge base.
+From ingestion of podcast metadata, through transcription, chunking, embedding, vector storage, retrieval, and evaluation – each spike incrementally builds towards an interactive, explainable RAG system.
 
-```bash
-uv sync
-```
+The final solution supports:
 
-## Repo Layout
+* **Natural language search** across episodes and years.
+* **Comparisons over time** (e.g. a guest’s views in 2021 vs 2024).
+* **Clip linking** directly to transcript timestamps.
+* **Evaluation and monitoring** with Phoenix.
+* **Reproducible, containerised deployment**.
+
+---
+
+## Project Overview
+
+| Area                 | Description                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Dataset**          | Modern Wisdom podcast RSS + audio                                                                                        |
+| **Objective**        | Build an end-to-end RAG system: ingestion → transcription → chunking → embedding → vector store → retrieval → agentic QA |
+| **Architecture**     | Python + DuckDB + Parquet + Qdrant + FastEmbed + OpenAI (optional)                                                       |
+| **Interface**        | FastAPI (programmatic API) and Chainlit 2.8.3 (chat UI)                                                                  |
+| **Evaluation**       | Retrieval metrics (Hit@k, MRR, p95 latency), LLM output validation, Phoenix tracing                                      |
+| **Containerisation** | Docker Compose (Qdrant, Phoenix, API, Chainlit)                                                                          |
+| **Reproducibility**  | `uv.lock` pinned dependencies and documented setup                                                                       |
+
+---
+
+## Repository Structure
 
 ```bash
 modern-wisdom-llm-native-pipeline/
-├─ data/duckdb/modern_wisdom.duckdb   # Local DuckDB file created by Spike 1
-├─ spikes/
-│  └─ spike1_rss_to_duckdb/
-│     ├─ src/spike1_rss_to_duckdb/main.py
-│     └─ notebooks/spike1_validation.ipynb
-└─ pyproject.toml
+├── data/
+│   ├── duckdb/modern_wisdom.duckdb      # Local DB (episodes, transcripts, chunks, embeddings)
+│   ├── transcripts/                     # Parquet ASR output per episode
+│   ├── chunks/sentence_bound/           # Chunks ready for embedding
+│   ├── embeddings/BAAI_bge_small_en_v1_5/  # Embedding vectors per episode
+│   ├── qdrant/                          # Local vector DB storage (Docker volume)
+│   ├── qa/labels.csv                    # Ground truth Q/A pairs for evaluation
+│   ├── evals/                           # Retrieval and LLM evaluation outputs
+│   └── tmp/                             # Temporary lists for backfills
+│
+├── docs/
+│   └── decisions/                       # Design and evaluation decisions per spike
+│
+├── spikes/
+│   ├── spike1_rss_to_duckdb/            # RSS ingestion
+│   ├── spike2_asr_timestamps/           # ASR transcription
+│   ├── spike3_chunking_and_metadata/    # Chunking experiments
+│   ├── spike4_embeddings/               # Embedding generation
+│   ├── spike5_qdrant_collection/        # Vector store creation
+│   ├── spike6_qdrant_retrieval/         # Retrieval baseline
+│   ├── spike7_hybrid_search/            # Hybrid RRF search
+│   ├── spike8_rag_contract/             # RAG generation contract
+│   ├── spike9_sql_introspection/        # SQL and metadata tools
+│   ├── spike10_tracing_monitoring/      # Phoenix tracing
+│   └── spike11_agent/                   # Constrained agent with reasoning chain
+│
+├── src/modern_wisdom_rag_pipeline/
+│   ├── api.py                           # FastAPI app for programmatic access
+│   ├── chainlit_app.py                  # Chainlit conversational UI
+│   ├── main.py                          # Entry point
+│   └── ...                              # Utilities and tools
+│
+├── infra/                               # Optional standalone docker-compose files
+├── Dockerfile                           # Multi-stage build
+├── docker-compose.yml                   # Full local stack (Qdrant, Phoenix, API, Chainlit)
+├── pyproject.toml                       # Dependency and build configuration
+└── uv.lock                              # Locked dependency versions
 ```
 
-## Troubleshooting
+---
 
-- If you need to query `duckdb` run the following to execute queries `duckdb ./data/duckdb/modern_wisdom.duckdb`
+## Summary of Spikes 1–7
 
-##  Spikes
+Each spike explores one layer of the pipeline. Full details are in the individual README files within each spike folder.
 
-### Spike 1 - RSS -> dlt -> DuckDB (incremental ingestion)
+### Spike 1 – RSS to DuckDB
 
-Goal
+**Purpose:** Incremental ingestion of the Modern Wisdom RSS feed into a structured DuckDB database using dlt.
+**Outcome:** 991 episodes loaded, incremental updates confirmed idempotent.
+**Rationale:** Local DuckDB offers analytical speed and SQL ergonomics without requiring a remote DB.
 
-- Ingest the Modern Wisdom podcast RSS feed into a local database
-- Build an incremental pipeline so only new or updated episodes are added.
+### Spike 2 – ASR with timestamps
 
-Run the pipeline
+**Purpose:** Convert audio into timestamped transcripts using AssemblyAI or local Faster-Whisper.
+**Outcome:** Complete corpus transcribed to Parquet. Average confidence ≈ 0.92.
+**Rationale:** Timestamps enable search, clipping, and alignment with video/audio.
+
+### Spike 3 – Chunking and metadata
+
+**Purpose:** Split transcripts into semantically meaningful windows.
+**Methods tested:** fixed-size, sentence-bound, time-window.
+**Decision:** *Sentence-bound* performed best (Hit@20 = 0.72, MRR = 0.38) balancing recall and readability.
+**Rationale:** Sentence boundaries maintain context and minimise mid-sentence cuts.
+
+### Spike 4 – Embeddings
+
+**Purpose:** Generate vector embeddings from chunks.
+**Comparison:**
+
+* OpenAI `t3-small` (1536 d) – accurate, slower.
+* FastEmbed `BAAI/bge-small-en-v1.5` (384 d) – fast, open, cost-free.
+  **Decision:** FastEmbed chosen for local reproducibility and good recall–latency trade-off.
+
+### Spike 5 – Qdrant Collection & Alias
+
+**Purpose:** Persist embeddings into a local vector store with live aliasing.
+**Outcome:** Deterministic collection per `emb_v`, blue/green alias `mw_chunks_live`.
+**Rationale:** Qdrant provides a simple REST + gRPC API, strong local performance, and alias support.
+
+![Qdrant Collection](docs/screenshots/qdrant_collections.png)
+![Qdrant Collection Details](docs/screenshots/qdrant_collection_details.png)
+
+### Spike 6 – Retrieval Baseline
+
+**Purpose:** Evaluate pure-vector retrieval using the labelled QA set.
+**Metrics:** Hit@10 = 0.60, MRR = 0.25, p95 latency ≈ 39 ms.
+**Rationale:** Establish baseline for comparison with hybrid methods.
+
+### Spike 7 – Hybrid Search
+
+**Purpose:** Combine lexical (BM25) and vector retrieval using Reciprocal Rank Fusion.
+**Improvement:** Hit@10 → 0.62 → 1.00 with BGE query prefix; latency ≈ 46 ms.
+**Decision:** Keep **query prefix ON**, continue with hybrid for production.
+
+---
+
+## Later Spikes (8–11) Overview
+
+### Spike 8 – RAG Contract
+
+Defines a lightweight schema and contract for RAG generation, decoupled from provider.
+Provides deterministic JSON output validated by `jsonschema`.
+
+### Spike 9 – SQL Introspection
+
+Adds SQL inspection and local DuckDB utilities for debugging and metadata queries.
+
+### Spike 10 – Tracing & Monitoring
+
+Integrates OpenTelemetry and Arize Phoenix.
+Each step (embedding, retrieval, generation) emits spans.
+Phoenix dashboard accessible at `http://localhost:6006`.
+
+![Phoenix Project](docs/screenshots/phoenix_project.png)
+![Phoenix Trace](docs/screenshots/phoenix_trace.png)
+
+### Spike 11 – Agentic Reasoning
+
+Implements a **constrained agent** that plans tool usage (RAG search, timeline builder, clip linker, etc.).
+Safely executes multi-step reasoning capped at 6 steps.
+CLI:
 
 ```bash
-uv run run-spike1
+uv run run-spike11 deep-agent --question "Compare Chris’s views on discipline in 2021 vs 2024"
 ```
 
-Expected output (example):
+Result: Coherent, evidence-linked comparison with timestamps and clip URLs.
 
-```text
-Loaded (new): 0, Updated (est): 0
-Total episodes: 991
-DuckDB at /data/duckdb/modern_wisdom.duckdb
-```
+---
 
-- First run: all episodes (≈991) are ingested.
-- Immediate re-run: Loaded (new): 0, Updated (est): 0 (idempotency check).
-- After a new episode is published or a record changes: counts reflect insert/update.
+## Evaluation Summary
 
-Validate results
+| Criterion                | Approach                                          | Result                                  |
+| ------------------------ | ------------------------------------------------- | --------------------------------------- |
+| **Problem description**  | Long-form audio locked in podcast format          | Addressed with ASR + RAG pipeline       |
+| **Retrieval flow**       | Hybrid (BM25 + vector) over Qdrant                | Hit@10 = 1.00 with BGE query prefix     |
+| **Retrieval evaluation** | Vector vs Hybrid compared                         | Hybrid chosen, p95 ≈ 46 ms              |
+| **LLM evaluation**       | Agent answers vs reference QA                     | JSON-validated correctness              |
+| **Interface**            | FastAPI + Chainlit UI                             | API on :8000 / UI on :8001              |
+| **Ingestion pipeline**   | Automated Python scripts using dlt + ASR + DuckDB | End-to-end reproducible                 |
+| **Monitoring**           | Phoenix dashboard + trace spans                   | 5+ charts, latency breakdown            |
+| **Containerisation**     | Docker Compose (Qdrant, Phoenix, API, Chainlit)   | Single-command deployment               |
+| **Reproducibility**      | `uv sync`, `uv lock`, bind mounts                 | Fully self-contained and version-pinned |
 
-Open the Jupyter notebook:
+---
+
+## Getting Started
+
+### Prerequisites
+
+* Docker ≥ 25
+* uv ≥ 0.4
+* Python ≥ 3.11 (if running locally)
+
+### Quick Start
 
 ```bash
-uv run --with jupyter jupyter lab
+uv sync
+export OPENAI_API_KEY=sk-your-real-openai-key
 ```
-
-Then navigate to [spike1_validation.ipynb](spikes/spike1_rss_to_duckdb/notebooks/spike1_validation.ipynb) and run the cells to:
-
-- Preview recent episodes.
-- Check yearly distribution of episodes.
-- Verify ingest run logs (mw.ingest_runs table).
-
-### Spike 2 – ASR pipeline with timestamps
-
-Automatic Speech Recognition (ASR) is the process of converting spoken language from audio into written text.  
-This spike builds an ASR pipeline that transcribes podcast episodes into **timestamped segments**, enabling search, analysis, and downstream NLP tasks.
-
-- Turn Modern Wisdom episode audio into **timestamped transcripts**.
-- Support **multiple ASR backends**:
-  - **AssemblyAI** (default; recommended for speed/scale, supports diarization).
-  - **Local faster-whisper** (for offline runs / cost-saving).
-- Store transcripts in **parquet format** for downstream analysis.
-
-#### Goals
-
-- Populate table `transcripts(episode_id, start_ts, end_ts, text, asr_model, confidence[, speaker])`.
-- Validate with spot-checks (e.g., Word Error Rate on 3 clips).
-- Produce:
-  - Small QA sheet of transcript samples
-  - A clear re-transcription policy
-  - Defined storage layout (parquet/csv per episode)
-
-#### Getting Started on ASR pipeline
-
-1. **Set environment variables:**
-
-   ```bash
-   export ASSEMBLYAI_API_KEY="your-api-key"
-   export ASR_BACKEND=assemblyai   # or "local" for faster-whisper
-   export ASR_LIMIT=5              # 0 = all episodes, or limit to first 
-   export ASR_DIARIZATION=1        # optional, enable speaker labels
-
-2. **Run the pipline**
-
-    ```bash
-    uv run run-spike2
-    ```
-
-3. **Sample output***
-
-    ```bash
-    ASR start | backend=assemblyai | mode=all episodes | available=991 | planned=991
-    [1/991] a1ccef1f... | OK | took 32.7s | avg 32.7s/ep | ETA 00:08:30 | segs 42
-    ...
-    ASR done | backend=assemblyai | processed=991 | ok=987 | fail=4 | elapsed=09:01:22
-    ```
-
-    - Parquet transcripts: `data/transcripts/episode_id=<id>/part-00000.snappy.parquet`
-    - Index CSV: `data/transcripts/index.csv` (tracks run stats, duration, status, errors)
-
-Validate results - Navigate to [spike2_validation.ipynb](spikes/spike2_asr_timestamps/notebooks/spike2_validation.ipynb) to view output stored in parquet files.
-
-## Spike 3
-
-The purpose of spike 3 is to decide how to split transcripts into chunks and attach the right metadata so retrieval later is accurate and efficient. We will then validate this choice with a tiny labeled Q/A set before moving on.
-
-###  Inputs
-
-- Transcripts from Spike 2 (per-episode parquet: segment_idx, start_ts, end_ts, text, asr_model, confidence).
-- Episode metadata from DuckDB (mw.episodes: title, guest, publish_date, episode_number, headline, duration…).
-- Q/A set (5–10 rows) with:
-  - question
-  - episode_id
-  - answer_start_ts, answer_end_ts
-  - optional keywords.
-
-### Approach
-
-```python
-from jsonschema import validate
-import json, pathlib
-
-schema = json.loads(pathlib.Path("data/evals/chunking/chunk_eval_report.schema.json").read_text())
-report = json.loads(pathlib.Path("data/evals/chunking/chunk_eval_report.json").read_text())
-validate(instance=report, schema=schema)
-```
-
-### Logic
-
-The logic is split into a number of files, the key logic resides in `eval.py`:
-
-`paths.py` — knows where everything lives (data/…, DuckDB path), and initialises the tokenizer.
-
-`utils.py` — small helpers: token counting, overlap math, UUIDs, BM25 tokenization, etc.
-
-`schema.py` — defines the required chunk columns and a validator so chunks are consistent.
-
-`transcript.py` — loads one episode’s transcript parquet and validates it (shape, timestamps, text).
-
-`chunkers.py` — builds chunks (3 methods): fixed, sentence_bound, time_window. Returns rows with full schema.
-
-`persist.py` — writes chunk rows to parquet and (optionally) upserts into DuckDB (table chunks).
-
-`eval.py` — runs BM25 over chunk text vs a tiny Q/A set and produces the method comparison + winner.
-
-`cli.py` — the thin command-line glue (check, chunk, eval).
-
-`main.py` — just calls the CLI.
 
 ```bash
-# step 1
-uv run run-spike3 check --episode-id <EPISODE_ID>
-# step 2
-uv run run-spike3 chunk \
-  --episode-id <EPISODE_ID> \
-  --methods sentence_bound \
-  --size-tokens 700 --overlap-tokens 100
-
-# step 3
-uv run run-spike3 chunk \
-  --episode-id <EPISODE_ID> \
-  --methods fixed,sentence_bound,time_window \
-  --size-tokens 700 --overlap-tokens 100 \
-  --window-seconds 190 --overlap-seconds 30 \
-  --duckdb
-
-# step 4
-uv run run-spike3 eval \
-  --episode-id <EPISODE_ID> \
-  --methods fixed,sentence_bound,time_window \
-  --qa-csv data/qa/labels.csv \
-  --k 20 --tolerance-s 7
-
+docker compose up
 ```
 
-### Step 1 - Preflight one episode (input sanity)
+Services:
+
+* Qdrant: [http://localhost:6333](http://localhost:6333)
+* Phoenix: [http://localhost:6006](http://localhost:6006)
+* API (FastAPI docs): [http://localhost:8000/docs](http://localhost:8000/docs)
+* Chainlit UI: [http://localhost:8001](http://localhost:8001)
+
+### Summary of steps to backfill (index initialisation - create collection + alias) almost 1000 episodes - chunk, embed and upsert into Qdrant
+
+As all the chunks and embeddings have already been created (located in the `data` directory). You only need to upsert the embeddings to Qdrant. Note this can take over 30 minutes.
 
 ```bash
-uv run run-spike3 check --episode-id 0a4fa77e-bc0f-11ef-bab6-3f37b4906b43
-              Transcript check — 0a4fa77e-bc0f-11ef-bab6-3f37b4906b43
-┏━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Metric ┃ Value                                                                  ┃
-┡━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ Rows   │ 2657                                                                   │
-│ Cols   │ segment_idx, start_ts, end_ts, text, asr_model, confidence, episode_id │
+EMB_V="BAAI/bge-small-en-v1.5"
+INDEX_VERSION="mw_chunks_live"
+
+cat data/tmp/epids_2018_2025.txt | while read -r EID; do
+  echo "Upserting vectors for $EID"
+  uv run run-spike5 upsert \
+    --episode-id "$EID" \
+    --method sentence_bound \
+    --emb-v "$EMB_V" \
+    --set-live \
+    --live-alias "$INDEX_VERSION"
+done
 ```
 
-### Step 2 - Produce chunks (no metadata yet) for 1 method
+### 4) Use the UI
+
+![Chainlit](docs/screenshots/chainlit_sample.png)
+
+Open **Chainlit** at [http://localhost:8001](http://localhost:8001) and ask similar questions.
+
+Open **API docs** at [http://localhost:8000/docs](http://localhost:8000/docs) for programmatic calls.
+
+Open **Phoenix** at [http://localhost:6006](http://localhost:6006) to see traces and metrics.
+
+Open **Qdrant** at [http://localhost:6333/dashboard](http://localhost:6333/dashboard) to view vector embeddings, collections, and their details.
+
+---
+
+## Tool and Service Rationale
+
+| Component                   | Motivation              | Role                         |
+| --------------------------- | ----------------------- | ---------------------------- |
+| DuckDB                      | Fast local analytics    | Episode + transcript lineage |
+| dlt                         | Declarative ingestion   | RSS → DB                     |
+| AssemblyAI / Faster-Whisper | ASR                     | Audio → text                 |
+| FastEmbed (BGE)             | Open, deterministic     | Embeddings                   |
+| Qdrant                      | Local vector DB + alias | Similarity search            |
+| BM25                        | Lexical grounding       | Hybrid retrieval             |
+| RRF                         | Rank fusion             | Better recall                |
+| FastAPI                     | Programmatic API        | Integration surface          |
+| Chainlit 2.8.3              | Chat UI                 | Human-in-the-loop            |
+| Phoenix (Arize)             | OTel visualisation      | Monitoring                   |
+| uv                          | Fast resolver           | Reproducibility              |
+| Docker Compose              | One-command stack       | Local demo                   |
+
+---
+
+## Reproducibility and Deployment
+
+* **All dependencies pinned** in `uv.lock`.
+* **Data persisted** under `./data` (bind-mounted volumes).
+* **Docker Compose** launches Qdrant, Phoenix, FastAPI, and Chainlit with one command.
+* **Local evaluation notebooks** validate each stage.
+* **Agent CLI** provides end-to-end testing and demo questions.
+
+To rebuild everything cleanly:
 
 ```bash
-uv run run-spike3 chunk --episode-id 0a4fa77e-bc0f-11ef-bab6-3f37b4906b43 \
-  --methods sentence_bound --size-tokens 700 --overlap-tokens 100
-Wrote 66 rows for sentence_bound → 
-/modern-wisdom-llm-native-pipeline/data/chunks/sentence_bound/episode_id=0a4fa77e-bc0f-11ef-bab6-3f37b4906b43/part-00000.snappy.parquet
-```
-
-### Step 3 - Add episode metadata enrichment (missing piece) and then produce for other methods
-
-```bash
-uv run run-spike3 chunk \
-  --episode-id 0a4fa77e-bc0f-11ef-bab6-3f37b4906b43 \
-  --methods fixed,sentence_bound,time_window \
-  --size-tokens 700 --overlap-tokens 100 \
-  --window-seconds 190 --overlap-seconds 30 \
-  --duckdb
-Wrote 49 rows for fixed → 
-/Users/ettyekhon/code/src/petroineos/petroineos-related/modern-wisdom-llm-native-pipeline/data/chunks/fixed/episode_id=0a4fa77e-bc0f-11ef-bab6-3f37b4906b43/part-00000.snappy.parquet
-Wrote 66 rows for sentence_bound → 
-/Users/ettyekhon/code/src/petroineos/petroineos-related/modern-wisdom-llm-native-pipeline/data/chunks/sentence_bound/episode_id=0a4fa77e-bc0f-11ef-bab6-3f37b4906b43/part-00000.snappy.p
-arquet
-Wrote 50 rows for time_window → 
-/Users/ettyekhon/code/src/petroineos/petroineos-related/modern-wisdom-llm-native-pipeline/data/chunks/time_window/episode_id=0a4fa77e-bc0f-11ef-bab6-3f37b4906b43/part-00000.snappy.parq
-uet
-
-### Step 4 — Evaluate (BM25 "findability")
-
-```bash
-uv run run-spike3 eval \
-  --episode-id 0a4fa77e-bc0f-11ef-bab6-3f37b4906b43 \
-  --methods fixed,sentence_bound,time_window \
-  --qa-csv data/qa/labels.csv \
-  --k 20 --tolerance-s 7 \
-  --prefer-efficient
-Eval report complete → /modern-wisdom-llm-native-pipeline/data/evals/chunking/chunk_eval_report.json, 
-/Users/ettyekhon/code/src/petroineos/petroineos-related/modern-wisdom-llm-native-pipeline/docs/decisions/0003-chunking.md
-Eval decision complete → /modern-wisdom-llm-native-pipeline/data/evals/chunking/chunk_eval_report.json
-Decision updated → /modern-wisdom-llm-native-pipeline/docs/decisions/0003-chunking.md
-Config updated → configs/chunking.toml
-```
-
-The [decision report](/docs/decisions/03-chunking.md) summarises the results and the winner. Visualisations summarising the results have also been created in the [spike3_validation.ipynb](/spikes/spike3_chunking_and_metadata/notebooks/spike3_validation.ipynb) notebook.
-
-###  Unit Tests for Spike 3
-
-```bash
-uv sync --all-extras
-uv run pytest -q
-```
-
-5 passed in 0.17s
-
-## Spike 4 — Embeddings
-
-### Objective
-
-Take transcript chunks from Spike 3 and generate embeddings for them.
-Ensure the process is:
-
-- Deterministic (idempotent: don’t re-embed what’s already done)
-- Configurable (support OpenAI, OSS, FastEmbed)
-- Persisted (Parquet + DuckDB for lineage)
-- Ready for Qdrant ingestion (Spike 5)
-
-### Inputs
-
-- Chunk parquet files from Spike 3
-  - Located under data/chunks/{method}/episode_id=.../part-*.parquet
-  - Each row includes:
-    chunk_id, episode_id, method, text, n_tokens, duration_s, metadata...
-- Embedding provider + model ID
-  - OpenAI: e.g. text-embedding-3-small (dim=1536)
-  - FastEmbed: e.g. BAAI/bge-small-en-v1.5 (dim=384)
-  - Optional: HuggingFace / sentence-transformers later
-
-Parameters via CLI:
---episode-id
---method
---emb-v (embedding version tag)
---provider (openai | fastembed | oss)
---model-id
---batch-size, --retries, --sleep-base-ms
---duckdb (flag to upsert into DuckDB)
-
-### Outputs
-
-- Parquet file with embeddings:
-  data/embeddings/{emb_v}/episode_id={id}/part-*.parquet
-- Each row contains:
-  - chunk_id (PK)
-  - episode_id
-  - method
-  - emb_v (embedding version)
-  - provider, model_id
-  - vector (float[])
-  - tokens, dim, attempts, status
-  - created_at, text_hash
-
-DuckDB table: embeddings
-
-- Same schema as above
-- Upsert by chunk_id + emb_v
-- Enables traceability across transcripts → chunks → embeddings
-
-### Details
-
-- Idempotency: before embedding, check DuckDB/parquet for existing chunk_id+emb_v; skip if    found.
-- Retries: exponential backoff with jitter on provider errors.
-- Dimension inference:
-  - OpenAI via lookup (text-embedding-3-small = 1536, etc.)
-  - FastEmbed via model introspection.
-- Provider abstraction: pluggable select_provider() returns a function that maps List[str] → List[vector].
-
-### Acceptance
-
-- Able to embed one episode (--episode-id) end-to-end with OpenAI and FastEmbed.
-- Re-running same command is a no-op (idempotent).
-- DuckDB shows correct count of embeddings.
-- CLI shows rich batch summary.
-
-### Decision Record (Outcome)
-
-- Chosen provider for default experiments: OpenAI (t3-small, 1536d).
-- OSS alternative tested: FastEmbed BGE-small-en-v1.5 (384d).
-- Result: Both pipelines work; FastEmbed cheaper/faster but lower-dim.
-- Next: Use Spike 4 outputs as input to Spike 5 (Qdrant).
-
----
-
-## Spike 5 — Qdrant Collection & Blue-Green Alias
-
-**Date:** 2025-10-09
-**Owner:** ettyekhon
-
----
-
-### Qdrant Objective
-
-Integrate **Qdrant vector search** as the production index for all chunked + embedded podcast transcripts (from Spikes 3 & 4), ensuring:
-
-- Deterministic collection naming per embedding version (`emb_v`)
-- Idempotent upserts (no duplication)
-- Blue/green deployment pattern via live alias
-- Local persistence (via Docker volume)
-- Simple CLI tooling for upsert, query, and health check
-
----
-
-### Qdrant Inputs
-
-| Source                 | Description                                                                               | Example                   |
-| ---------------------- | ----------------------------------------------------------------------------------------- | ------------------------- |
-| **Embeddings Parquet** | Output from Spike 4 (`/data/embeddings/<emb_v>/episode_id=.../part-00000.snappy.parquet`) | `fe_bge_small_en_v1_5_v1` |
-| **Chunk Metadata**     | From Spike 3 chunking results                                                             | `sentence_bound`          |
-| **Qdrant Instance**    | Local Docker container                                                                    | `http://localhost:6333`   |
-
----
-
-## Qdrant Output
-
-| Type             | Location / Name                       | Notes                                     |
-| ---------------- | ------------------------------------- | ----------------------------------------- |
-| **Collection**   | `mw_chunks_<emb_v>`                   | e.g., `mw_chunks_fe_bge_small_en_v1_5_v1` |
-| **Alias**        | `mw_chunks_live`                      | Always points to latest “live” collection |
-| **Qdrant Data**  | persisted in `./data/qdrant`          | Mounted as Docker volume                  |
-| **CLI Commands** | `run-spike5 upsert`, `check`, `query` | Fully idempotent                          |
-
----
-
-### Qdrant Setup (Qdrant local)
-
-```bash
-docker compose -f infra/qdrant/docker-compose.yml up -d
-```
-
-Qdrant Web UI:
-[http://localhost:6333/dashboard](http://localhost:6333/dashboard)
-
----
-
-### How to Run (End-to-End)
-
-#### Upsert episode embeddings
-
-```bash
-uv run run-spike5 upsert \
-  --episode-id 0a4fa77e-bc0f-11ef-bab6-3f37b4906b43 \
-  --method sentence_bound \
-  --emb-v fe_bge_small_en_v1_5_v1 \
-  --set-live
-```
-
-Expected output:
-
-```text
-Alias set: mw_chunks_live → mw_chunks_fe_bge_small_en_v1_5_v1
-```
-
-####  Check collection + alias
-
-```bash
-uv run run-spike5 check --emb-v fe_bge_small_en_v1_5_v1
-```
-
-Expected:
-
-```text
-mw_chunks_fe_bge_small_en_v1_5_v1: status=green, vector_size=384, distance=Cosine, points=66
-Aliases for mw_chunks_fe_bge_small_en_v1_5_v1: ['mw_chunks_live']
-```
-
-#### Query (sanity search)
-
-```bash
-uv run run-spike5 query \
-  --emb-v fe_bge_small_en_v1_5_v1 \
-  --episode-id 0a4fa77e-bc0f-11ef-bab6-3f37b4906b43 \
-  --top-k 5
-```
-
-Expected:
-
-```text
-id=uuid-123 score=0.91 episode=0a4fa77e-bc0f-11ef-bab6-3f37b4906b43
-...
+docker compose down -v
+uv sync --frozen
+docker compose up --build
 ```
 
 ---
 
-#### Decision
+## Conclusion
 
-**Chosen approach:**
-Qdrant + FastEmbed + DuckDB
-(using `qdrant-client` v1.15.x API with `get_collection_aliases`)
-
-**Rationale:**
-
-- Local, fast, embeddable vector DB
-- Deterministic collection per `emb_v`
-- Explicit blue/green alias (`mw_chunks_live`)
-- Supports both HTTP & gRPC APIs
-- Integrates cleanly with FastEmbed (no external OpenAI dependency)
-
----
-
-## Spike 6 — Qdrant Retrieval
-
-| Step                     | What it did                                              | Output                                      |
-| ------------------------ | -------------------------------------------------------- | ------------------------------------------- |
-| **1. Loaded QA**         | Pulled `labels.csv` with ground-truth start/end times.   | `data/qa/labels.csv`                        |
-| **2. Loaded Embeddings** | Read from `/data/embeddings/fe_bge_small_en_v1_5_v1/...` | Verified shape = 384 dim                    |
-| **3. Queried Qdrant**    | For each question, searched `mw_chunks_live`             | Measured per-query latency                  |
-| **4. Scored Retrieval**  | Computed Hit@k, MRR & p95 latency                        | `retrieval_baseline.json`                   |
-| **5. Wrote Docs**        | Created Markdown decision file                           | `docs/decisions/0006-retrieval-baseline.md` |
-
-- FastEmbed model (`BAAI/bge-small-en-v1.5`) was automatically downloaded and cached
-- Qdrant search succeeded via the `mw_chunks_live` alias
-- Results persisted deterministically
-
----
-
-### Output
-
-```text
-data/evals/retrieval/retrieval_baseline.json
-docs/decisions/0006-retrieval-baseline.md
-```
-
-These files contain metrics like:
-
-```json
-{
-  "Hit@5": 0.40,
-  "Hit@10": 0.60,
-  "Hit@20": 0.70,
-  "MRR": 0.25,
-  "p95_latency_ms": 38.7
-}
-```
-
-Can be used later for charts or regression comparisons when we test hybrid retrieval.
-
----
-
-### Spike 6 Completion Checklist
-
-| Goal                                          |
-| --------------------------------------------- |
-| Vector-only retrieval baseline                |
-| Deterministic I/O + reports                   |
-| Uses FastEmbed + Qdrant (no OpenAI)           |
-| Ready for Phoenix tracing or hybrid extension |
-
----
-
-## Spike 7 Hybrid Search
-
-| Step                                       | What Happened                                                      | Output                                           |
-| ------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------ |
-| **1. Load QA + embeddings + chunks**       | Read your labeled Q/A CSV, episode embeddings, and chunk metadata. | from `data/qa`, `data/embeddings`, `data/chunks` |
-| **2. BM25 lexical retrieval**              | Scored all chunks textually using `rank_bm25`.                     | lexical rank list                                |
-| **3. Vector retrieval**                    | Queried Qdrant for dense similarity (Cosine).                      | vector rank list                                 |
-| **4. RRF Fusion (Reciprocal Rank Fusion)** | Combined both scores deterministically.                            | fused ranked list                                |
-| **5. Metrics computation**                 | Calculated Hit@5/10/20, MRR, and p95 latency.                      | `retrieval_hybrid.json`                          |
-| **6. Documentation output**                | Created an auditable decision record.                              | `0007-retrieval-hybrid.md`                       |
-
----
-
-### Spike 7 Output
-
-```text
-data/evals/retrieval/retrieval_hybrid.json
-```
-
-Contains something like:
-
-```json
-{
-  "summary": {
-    "episode_id": "0a4fa77e-bc0f-11ef-bab6-3f37b4906b43",
-    "emb_v": "fe_bge_small_en_v1_5_v1",
-    "method": "sentence_bound",
-    "metrics": {
-      "Hit@5": 0.54,
-      "Hit@10": 0.62,
-      "Hit@20": 0.72,
-      "MRR": 0.38
-    },
-    "p95_latency_ms": 45.8
-  }
-}
-```
-
-```text
-docs/decisions/0007-retrieval-hybrid.md
-```
-
-Contains:
-
-### Retrieval hybrid — fe_bge_small_en_v1_5_v1 (episode 0a4fa77e-bc0f-11ef-bab6-3f37b4906b43)
-
-- collection: `mw_chunks_live`
-- method: `sentence_bound`
-- ks: [5, 10, 20] tol_s=7 rrf_k=60.0 vec_k=20 lex_k=200
-- filters: {"guest": null, "date_from": null, "date_to": null}
-
-### Metrics
-
-```json
-{
-  "Hit@5": 0.54,
-  "Hit@10": 0.62,
-  "Hit@20": 0.72,
-  "MRR": 0.38
-}
-```
-
-- p95_latency_ms: 45.8
-
----
-
-### Summary of results
-
-- **No prefix ("False")**
-
-  - **Vector-only** cratered (Hit@10 = 0.0, MRR = 0.0) → classic mismatch.
-  - **Hybrid** still salvaged some signal (Hit@10 = 0.5), but not great.
-
-- **With BGE query prefix ("True")**
-
-  - **Hybrid pops**: **Hit@10 = 1.0**, **Hit@20 = 1.0**, p95 ≈ **3.75 ms**.
-  - MRR improved vs "False" (0.1875 vs 0.0625). For tiny QA sets, MRR is sensitive; Hit@k is your main gate.
-
-### What this means
-
-- For **BAAI/bge-small-en-v1.5**, using **`query: …`** on queries materially improves retrieval when your chunks were embedded **without** `passage:`.
-- **Keep the query prefix ON** for Spike 7+. Document this as part of the contract: *“BGE queries use `query:` prefix; docs currently un-prefixed.”*
-
-### Completed
-
-- Combine vector + BM25 retrieval via RRF
-- Add filters (guest/date range)
-- Generate metrics + decision record
-
----
+This project demonstrates a full end-to-end retrieval-augmented generation system using a real-world podcast dataset.
+Starting from raw audio, it delivers a searchable, explainable knowledge base capable of producing timestamped, evidence-linked answers.
+Each design decision was guided by empirical evaluation, simplicity, and reproducibility — making it straightforward for others to run, extend, and mark.

@@ -8,39 +8,7 @@
   ],
   "properties": {
     "retrieved": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "chunk_id",
-          "score",
-          "text",
-          "episode_id",
-          "start_ts",
-          "end_ts"
-        ],
-        "properties": {
-          "chunk_id": {
-            "type": "string"
-          },
-          "score": {
-            "type": "number"
-          },
-          "text": {
-            "type": "string"
-          },
-          "episode_id": {
-            "type": "string"
-          },
-          "start_ts": {
-            "type": "number"
-          },
-          "end_ts": {
-            "type": "number"
-          }
-        },
-        "additionalProperties": true
-      }
+      "type": "array"
     },
     "retrieve_ms": {
       "type": "number"
@@ -49,8 +17,12 @@
       "type": "boolean"
     },
     "scope": {
-      "type": "string"
+      "type": "string",
+      "enum": [
+        "episode",
+        "corpus"
+      ]
     }
   },
-  "additionalProperties": false
+  "additionalProperties": true
 }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import re
 from typing import Any, cast
 
@@ -45,10 +46,14 @@ def rag_search(inp: dict[str, Any]) -> dict[str, Any]:
 
     _check(norm, RAG_SEARCH_IN)
 
-    # if episode_id is empty or missing, treat as corpus search (unless explicitly "episode")
-    if (not norm.get("episode_id")) and norm.get("scope") != "episode":
-        norm["scope"] = "corpus"
+    # normalize empty / whitespace/ special "all"
+    ep_raw = str(norm.get("episode_id", "") or "").strip().lower()
+    if ep_raw in {"", "all", "corpus", "none", "null"}:
         norm["episode_id"] = None
+
+    # if episode_id is empty or missing, treat as corpus search (unless explicitly "episode")
+    if norm.get("episode_id") is None and norm.get("scope") != "episode":
+        norm["scope"] = "corpus"
 
     with start_span(
         "tool.rag_search",
@@ -115,19 +120,23 @@ def episode_locator(inp: dict[str, Any]) -> dict[str, Any]:
             candidate_schemas = ["mw", "mw_staging", "main"]
             table_name = None
             for sch in candidate_schemas:
-                if con.execute(
-                    "select count(*) from information_schema.tables where table_schema=? and table_name='episodes'",
+                row = con.execute(
+                    "select count(*) from information_schema.tables "
+                    "where table_schema=? and table_name='episodes'",
                     [sch],
-                ).fetchone()[0]:
+                ).fetchone()
+                if row and row[0]:
                     table_name = f"{sch}.episodes"
                     break
             if not table_name:
                 return _err("No episodes table found in schemas: mw, mw_staging, main")
 
+            # discover available columns
             cols = {
                 r[0]
                 for r in con.execute(
-                    "select column_name from information_schema.columns where table_schema=? and table_name='episodes'",
+                    "select column_name from information_schema.columns "
+                    "where table_schema=? and table_name='episodes'",
                     [table_name.split(".", 1)[0]],
                 ).fetchall()
             }
@@ -136,7 +145,7 @@ def episode_locator(inp: dict[str, Any]) -> dict[str, Any]:
             search_candidates = ["title", "guest", "headline", "description", "summary"]
             search_cols = [c for c in search_candidates if c in cols]
 
-            where_parts = []
+            where_parts: list[str] = []
             params: list[Any] = []
 
             if search_cols:
@@ -144,29 +153,28 @@ def episode_locator(inp: dict[str, Any]) -> dict[str, Any]:
                 where_parts.append(f"({likes})")
                 params.extend([f"%{q}%"] * len(search_cols))
 
-            # year filter if we have a date column and parsed years
             date_col = "publish_date" if "publish_date" in cols else None
             if date_col and years:
                 year_list = ", ".join(str(y) for y in sorted(set(years)))
-                where_parts.append(f"EXTRACT(year FROM {date_col}) IN ({year_list})")
+                where_parts.append(
+                    f"EXTRACT(year FROM try_cast({date_col} AS DATE)) IN ({year_list})"
+                )
 
             where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
 
-            select_parts = ["id as episode_id"]
+            select_parts = ["id AS episode_id"]
             for c in ("title", "guest", "headline", "description"):
                 select_parts.append(c if c in cols else f"CAST('' AS TEXT) AS {c}")
-            if date_col:
-                select_parts.append(date_col)
-            if "episode_number" in cols:
-                select_parts.append("episode_number")
-            if "source_url" in cols:
-                select_parts.append("source_url")
 
             order_sql = ""
             if date_col:
-                # If years given, prioritize by closeness to those years; else just recent
                 if years:
-                    order_sql = f"ORDER BY ABS(EXTRACT(year FROM {date_col}) - {years[0]}) ASC, {date_col} DESC"
+                    # prioritize proximity to the first mentioned year, then recency
+                    pivot_year = years[0]
+                    order_sql = (
+                        f"ORDER BY ABS(EXTRACT(year FROM try_cast({date_col} AS DATE)) - {pivot_year}) ASC, "
+                        f"{date_col} DESC"
+                    )
                 else:
                     order_sql = f"ORDER BY {date_col} DESC"
 
@@ -179,7 +187,7 @@ def episode_locator(inp: dict[str, Any]) -> dict[str, Any]:
             """
             rows_meta = con.execute(sql_meta, [*params, limit]).fetchall()
             if rows_meta:
-                desc = [d[0] for d in con.description]
+                desc = [d[0] for d in (con.description or [])]
                 idx = {n: i for i, n in enumerate(desc)}
 
                 def g(r, n, d=""):
@@ -198,35 +206,84 @@ def episode_locator(inp: dict[str, Any]) -> dict[str, Any]:
                 ]
                 return _ok({"episodes": episodes}, EPISODE_LOCATOR_OUT)
 
-            # 3) content fallback (fixed glob for partitioned dataset)
-            #   EXPECTED LAYOUT: data/chunks/sentence_bound/episode_id=<UUID>/part-*.parquet
+            # 3) content fallback (partitioned chunks)
+            #    EXPECTED: data/chunks/sentence_bound/episode_id=<UUID>/part-*.parquet
             chunks_glob = (
                 paths.CHUNKS_DIR / "sentence_bound" / "episode_id=*" / "part-*.parquet"
             ).as_posix()
-            # Rank episodes by text hits; optional year bias via episodes table join
-            sql_hits = f"""
-                WITH hits AS (
-                    SELECT COALESCE(episode_id, '') AS episode_id, COUNT(*) AS hits
-                    FROM read_parquet('{chunks_glob}')
-                    WHERE text ILIKE ?
-                    GROUP BY 1
-                )
-                SELECT h.episode_id, h.hits
-                FROM hits h
-                ORDER BY h.hits DESC
-                LIMIT ?
-            """
-            hit_rows = con.execute(
-                sql_hits, [f"%{q}%", limit * 3]
-            ).fetchall()  # overfetch then trim
-            ep_ids = [str(r[0]) for r in hit_rows if r and r[0]]
+
+            # detect the text column in chunk parquet
+            cols_df = con.execute(
+                "SELECT * FROM read_parquet(?, hive_partitioning=1, union_by_name=1) LIMIT 0",
+                [chunks_glob],
+            ).fetchdf()
+            avail_cols = set(cols_df.columns)
+            text_candidates = [
+                "text",
+                "content",
+                "segment_text",
+                "segment",
+                "transcript",
+                "raw_text",
+                "body",
+                "snippet",
+                "utterance",
+                "line",
+                "value",
+            ]
+            text_col = next((c for c in text_candidates if c in avail_cols), None)
+
+            # tokenization: OR over non-numeric informative tokens
+            raw_tokens = re.findall(r"[A-Za-z0-9']+", q.lower())
+            stop = {
+                "the",
+                "a",
+                "an",
+                "and",
+                "or",
+                "to",
+                "of",
+                "on",
+                "in",
+                "vs",
+                "view",
+                "views",
+                "about",
+            }
+            tokens = [t for t in raw_tokens if t.isalpha() and len(t) >= 3 and t not in stop]
+            if not tokens:
+                tokens = ["discipline"]
+
+            ep_ids: list[str] = []
+            if text_col:
+                like_pred = " OR ".join([f"lower({text_col}) LIKE ?"] * len(tokens))
+                like_args = [f"%{t}%" for t in tokens]
+
+                sql_hits = f"""
+                    WITH hits AS (
+                        SELECT COALESCE(episode_id, '') AS episode_id, COUNT(*) AS hits
+                        FROM read_parquet('{chunks_glob}', hive_partitioning=1, union_by_name=1)
+                        WHERE {like_pred}
+                        GROUP BY 1
+                    )
+                    SELECT h.episode_id, h.hits
+                    FROM hits h
+                    ORDER BY h.hits DESC
+                    LIMIT ?
+                """
+                hit_rows = con.execute(sql_hits, [*like_args, limit * 3]).fetchall()
+                ep_ids = [str(r[0]) for r in hit_rows if r and r[0]]
 
             episodes: list[dict[str, Any]] = []
             if ep_ids:
                 ph = ", ".join(["?"] * len(ep_ids))
                 order_bias = ""
                 if date_col and years:
-                    order_bias = f"ORDER BY ABS(EXTRACT(year FROM {date_col}) - {years[0]}) ASC, {date_col} DESC"
+                    pivot_year = years[0]
+                    order_bias = (
+                        f"ORDER BY ABS(EXTRACT(year FROM try_cast({date_col} AS DATE)) - {pivot_year}) ASC, "
+                        f"{date_col} DESC"
+                    )
                 elif date_col:
                     order_bias = f"ORDER BY {date_col} DESC"
 
@@ -244,7 +301,7 @@ def episode_locator(inp: dict[str, Any]) -> dict[str, Any]:
                 """
                 rows_join = con.execute(sql_join, [*ep_ids, limit]).fetchall()
                 if rows_join:
-                    desc = [d[0] for d in con.description]
+                    desc = [d[0] for d in (con.description or [])]
                     idx = {n: i for i, n in enumerate(desc)}
 
                     def gj(r, n, d=""):
@@ -265,7 +322,7 @@ def episode_locator(inp: dict[str, Any]) -> dict[str, Any]:
             if episodes:
                 return _ok({"episodes": episodes[:limit]}, EPISODE_LOCATOR_OUT)
 
-            # 4) last resort: latest episodes (unchanged from your behavior)
+            # 4) last resort: latest episodes
             if "publish_date" in cols:
                 sql_latest = f"""
                     SELECT id AS episode_id,
@@ -274,12 +331,12 @@ def episode_locator(inp: dict[str, Any]) -> dict[str, Any]:
                            {"headline" if "headline" in cols else "CAST('' AS TEXT) AS headline"},
                            {"description" if "description" in cols else "CAST('' AS TEXT) AS description"}
                     FROM {table_name}
-                    ORDER BY publish_date DESC
+                    ORDER BY {date_col if date_col else "id"} DESC
                     LIMIT ?
                 """
                 rows_latest = con.execute(sql_latest, [limit]).fetchall()
                 if rows_latest:
-                    desc = [d[0] for d in con.description]
+                    desc = [d[0] for d in (con.description or [])]
                     idx = {n: i for i, n in enumerate(desc)}
 
                     def gl(r, n, d=""):
@@ -303,10 +360,8 @@ def episode_locator(inp: dict[str, Any]) -> dict[str, Any]:
         except Exception as e:
             return _err(str(e))
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 con.close()
-            except Exception:
-                pass
 
 
 # ---- timeline_builder (cluster + summarize short range text) ----

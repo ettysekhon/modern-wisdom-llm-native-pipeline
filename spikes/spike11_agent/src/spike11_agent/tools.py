@@ -5,7 +5,7 @@ import time
 from typing import Any, NotRequired, TypedDict
 
 from spike7_hybrid.bm25 import score_bm25
-from spike7_hybrid.hybrid import rrf_fuse, top_ids_by_score
+from spike7_hybrid.hybrid import rrf_fuse
 from spike8_rag_contract import paths
 from spike8_rag_contract.io import load_chunks_df
 from spike8_rag_contract.qdrant import client, vector_search
@@ -27,6 +27,7 @@ class RagSearchArgs(TypedDict):
 
 
 WORD_RE = re.compile(r"\w+")
+YEAR_RE = re.compile(r"\b(20\d{2})\b")
 
 
 def _tokset(s: str) -> set[str]:
@@ -37,190 +38,222 @@ def _overlap(q: str, t: str) -> int:
     return len(_tokset(q) & _tokset(t))
 
 
-def _enrich(docs, chunks_df, episode_id: str) -> list[dict]:
-    pld = {str(row["chunk_id"]): row.to_dict() for _, row in chunks_df.iterrows()}
+def _safe_load_chunks_df(ep_id: str):
+    """Load chunks df; return empty-frame shaped mapping on failure."""
+    try:
+        return load_chunks_df("sentence_bound", ep_id)
+    except Exception:
+        import pandas as pd
+
+        return pd.DataFrame(
+            {"chunk_id": [], "start_ts": [], "end_ts": [], "text": [], "publish_date": []}
+        )
+
+
+def _enrich_many(docs, df_cache: dict[str, dict], default_ep: str | None = None) -> list[dict]:
+    """
+    Enrich Qdrant points with chunk metadata from parquet; builds per-episode row cache on demand.
+    """
     out = []
     for d in docs:
         did = d["id"] if isinstance(d, dict) else getattr(d, "id", "")
-        score = d["score"] if isinstance(d, dict) else getattr(d, "score", 0.0)
-        cid = str(did)
-        row = pld.get(cid, {}) or {}
+        payload = d.get("payload", {}) if isinstance(d, dict) else getattr(d, "payload", {}) or {}
+        ep_id = (
+            str(payload.get("episode_id", default_ep or ""))
+            if payload is not None
+            else (default_ep or "")
+        )
+
+        if ep_id and ep_id not in df_cache:
+            df = _safe_load_chunks_df(ep_id)
+            df_cache[ep_id] = {str(row["chunk_id"]): row.to_dict() for _, row in df.iterrows()}
+
+        row = df_cache.get(ep_id, {}).get(str(did), {}) or {}
         out.append(
             {
-                "chunk_id": cid,
-                "score": float(score or 0.0),
+                "chunk_id": str(did),
+                "score": float(
+                    d["score"] if isinstance(d, dict) else getattr(d, "score", 0.0) or 0.0
+                ),
                 "start_ts": float(row.get("start_ts", 0.0)),
                 "end_ts": float(row.get("end_ts", 0.0)),
                 "text": row.get("text", ""),
-                "episode_id": str(row.get("episode_id", episode_id)),
+                "episode_id": ep_id,
+                "publish_date": row.get("publish_date", ""),
             }
         )
     return out
 
 
-def _episode_local_hybrid(question: str, episode_id: str, top_k: int) -> tuple[list[dict], float]:
-    # Params that worked well in Spike 7
-    k_vec, k_lex, rrf_k = 20, 200, 60.0
+def _topk_unique(recs: list[dict], k_: int) -> list[dict]:
+    seen, final = set(), []
+    for r in recs:
+        cid = r.get("chunk_id")
+        if cid in seen:
+            continue
+        final.append(r)
+        seen.add(cid)
+        if len(final) >= k_:
+            break
+    return final
 
-    # Embed
-    qv = embed_question_fastembed(question, model_id="BAAI/bge-small-en-v1.5")
 
-    # Vector
-    cli = client(paths.QDRANT_URL, paths.QDRANT_API_KEY)
-    t0 = time.perf_counter()
-    vec_docs, rt_ms_vec = vector_search(
-        cli,
-        collection=paths.INDEX_VERSION,
-        episode_id=episode_id,
-        q_vector=qv,
-        top_k=k_vec,
-    )
-    vec_ids = top_ids_by_score(vec_docs, k_vec)
+def _ids_sorted_by_vecscore(docs: list[dict]) -> list[str]:
+    """IDs sorted by vector score (desc)."""
+    return [d["chunk_id"] for d in sorted(docs, key=lambda x: -float(x.get("score", 0.0)))]
 
-    # BM25 within episode
-    chunks_df = load_chunks_df("sentence_bound", episode_id)
-    corpus_texts = chunks_df["text"].astype(str).tolist()
-    corpus_ids = chunks_df["chunk_id"].astype(str).tolist()
-    bm0 = time.perf_counter()
-    lex_scores = score_bm25(question, corpus_texts)
-    rt_ms_bm25 = (time.perf_counter() - bm0) * 1000.0
-    lex_rank = sorted(zip(corpus_ids, lex_scores, strict=False), key=lambda x: x[1], reverse=True)[
-        :k_lex
-    ]
-    lex_ids = [cid for cid, _ in lex_rank]
 
-    # RRF
-    fused = rrf_fuse({"vec": vec_ids, "lex": lex_ids}, k=rrf_k)
-    fused_ids = [pid for pid, _ in fused][:top_k]
+def _ids_sorted_by_bm25(question: str, docs: list[dict]) -> list[str]:
+    """IDs sorted by BM25 score (desc) over the candidate texts."""
+    texts = [d.get("text", "") for d in docs]
+    scores = score_bm25(query=question, docs=texts)
+    ord_idx = sorted(range(len(docs)), key=lambda i: -float(scores[i]))
+    return [docs[i]["chunk_id"] for i in ord_idx]
 
-    # Enrich
-    pld = {str(row["chunk_id"]): row for _, row in chunks_df.iterrows()}
-    results = []
+
+def _apply_year_boost(
+    order_ids: list[str],
+    fused_pairs: list[tuple[str, float]],
+    id2doc: dict[str, dict],
+    years: list[int],
+) -> list[str]:
+    """
+    Apply a tiny year-aware bias: if publish_date year is in query years, nudge forward.
+    We re-rank by subtracting a small delta from fused reciprocal rank score (i.e., better).
+    """
+    if not years:
+        return order_ids
+    hints = set(years)
+    # Build mutable score map from fused pairs (higher is better in typical RRF implementations)
+    scores = {cid: float(s) for cid, s in fused_pairs}
+    for cid in order_ids:
+        doc = id2doc.get(cid, {})
+        pd = str(doc.get("publish_date") or "")
+        yr = None
+        if len(pd) >= 4 and pd[:4].isdigit():
+            yr = int(pd[:4])
+        if yr and yr in hints:
+            # small positive bump
+            scores[cid] = scores.get(cid, 0.0) + 0.25
+    # Return ids sorted by bumped score desc
+    return sorted(order_ids, key=lambda x: -scores.get(x, 0.0))
+
+
+def _apply_topic_boost(order_ids: list[str], id2doc: dict[str, dict]) -> list[str]:
+    """
+    Ensure we bias slightly toward chunks that actually mention discipline/routines/habits.
+    This is a soft tie-breaker applied after RRF (stable for non-ties).
+    """
+    topic = {"discipline", "disciplined", "routines", "routine", "habit", "habits"}
+
+    def has_topic(cid: str) -> bool:
+        t = (id2doc.get(cid, {}).get("text") or "").lower()
+        return any(w in t for w in topic)
+
+    # Stable sort with key: topic first (False < True => reverse logic)
+    return sorted(order_ids, key=lambda cid: (not has_topic(cid)))
+
+
+def _hybrid_rerank(question: str, docs: list[dict], k: int, years: list[int]) -> list[dict]:
+    """
+    RRF(vec-order, bm25-order) → optional year/topic boosts → top-k unique.
+    Uses imported rrf_fuse signature that accepts {"name": [ids...]} and returns [(id, score)].
+    """
+    if not docs:
+        return []
+
+    # Build id->doc map
+    by_id = {d["chunk_id"]: d for d in docs}
+
+    # 1) vector order (by vector score desc)
+    vec_ids = _ids_sorted_by_vecscore(docs)
+
+    # 2) bm25 order (by lexical score desc)
+    bm_ids = _ids_sorted_by_bm25(question, docs)
+
+    # 3) fuse
+    fused: list[tuple[str, float]] = rrf_fuse({"vec": vec_ids, "lex": bm_ids}, k=60.0)
+    fused_ids = [cid for cid, _ in fused]
+
+    # 4) small year bias
+    fused_ids = _apply_year_boost(fused_ids, fused, by_id, years)
+
+    # 5) small topic bias (discipline/routine/habits)
+    fused_ids = _apply_topic_boost(fused_ids, by_id)
+
+    # 6) take top-k unique and return docs in that order
+    final_ids = []
+    seen = set()
     for cid in fused_ids:
-        row = pld.get(str(cid))
-        if row is None:
-            row = {}
-        score = next((float(s) for (pid, s) in fused if pid == cid), 0.0)
-        results.append(
-            {
-                "chunk_id": str(cid),
-                "score": float(score),
-                "start_ts": _as_float(row.get("start_ts", 0.0)),
-                "end_ts": _as_float(row.get("end_ts", 0.0)),
-                "text": row.get("text", ""),
-                "episode_id": row.get("episode_id", episode_id),
-            }
-        )
-
-    retrieve_ms = (time.perf_counter() - t0) * 1000.0 + rt_ms_bm25
-    return results, retrieve_ms
-
-
-def _corpus_episode_locator(question: str, max_eps: int = 5) -> list[str]:
-    """
-    Simple BM25 over the entire transcript corpus to find episodes that actually
-    mention the query tokens. Uses Spike 8 chunk parquet to keep things simple.
-    """
-    # Load all chunks for current index (one file per episode); if you have a global parquet, use it.
-    # Here, we piggyback on Spike 8’s cached per-episode reader by scanning the index file list from DuckDB/paths.
-    # If you have a central DuckDB table, switch to a SELECT ... GROUP BY episode_id ORDER BY MAX(score).
-    import duckdb
-    from spike4_embeddings import paths as p4
-
-    db = duckdb.connect(p4.DUCKDB_PATH.as_posix(), read_only=True)
-
-    df = db.execute("""
-        SELECT episode_id, chunk_id, text
-        FROM mw_chunks_live
-    """).df()
-
-    texts = df["text"].astype(str).tolist()
-    scores = score_bm25(question, texts)
-    df["__score"] = scores
-
-    top = (
-        df[["episode_id", "__score"]]
-        .groupby("episode_id", as_index=False)
-        .max()
-        .sort_values(by="__score", ascending=False)  # type: ignore[arg-type]
-        .head(max_eps)
-    )
-    return [str(x) for x in top["episode_id"].tolist()]
+        if cid in seen:
+            continue
+        seen.add(cid)
+        final_ids.append(cid)
+        if len(final_ids) >= k:
+            break
+    return [by_id[cid] for cid in final_ids]
 
 
 def rag_search(args: RagSearchArgs) -> dict[str, Any]:
-    q = args.get("question", "")
+    q = args.get("question", "") or ""
     ep = args.get("episode_id")
     k = int(args.get("top_k", 8))
     scope = args.get("scope", "auto")
 
-    # Handle corpus-only search (no episode_id)
+    # --- Normalize episode_id ("" | "all" | "corpus" | None) → None ---
+    if isinstance(ep, str):
+        ep_norm = ep.strip().lower()
+        if ep_norm in {"", "all", "corpus", "none", "null"}:
+            ep = None
+    if ep is None and scope != "episode":
+        scope = "corpus"
+
+    # If caller insists on episode scope but no episode_id, return empty (do not crash)
+    if scope == "episode" and ep is None:
+        return {"retrieved": [], "retrieve_ms": 0.0, "fallback_used": False, "scope": "episode"}
+
+    cli = client(paths.QDRANT_URL, paths.QDRANT_API_KEY)
+
+    # 0) Embed once
+    qv = embed_question_fastembed(q, model_id="BAAI/bge-small-en-v1.5")
+    years = [int(y) for y in YEAR_RE.findall(q)]
+
+    # ---- No episode_id → corpus-only path ----
     if ep is None:
-        cli = client(paths.QDRANT_URL, paths.QDRANT_API_KEY)
-        qv = embed_question_fastembed(q, model_id="BAAI/bge-small-en-v1.5")
         t0 = time.perf_counter()
-        corp_docs, rt_ms_corp = vector_search(
+        corp_docs, _ = vector_search(
             cli, collection=paths.INDEX_VERSION, q_vector=qv, top_k=k * 6, episode_id=None
         )
-        # Build cache and enrich results
         corpus_cache: dict[str, dict] = {}
-        corpus_out: list[dict] = []
-        for d in corp_docs:
-            did = d["id"] if isinstance(d, dict) else getattr(d, "id", "")
-            payload = (
-                d.get("payload", {}) if isinstance(d, dict) else getattr(d, "payload", {}) or {}
-            )
-            ep_id = str(payload.get("episode_id", ""))
-            if ep_id and ep_id not in corpus_cache:
-                corpus_cache[ep_id] = {
-                    str(row["chunk_id"]): row.to_dict()
-                    for _, row in load_chunks_df("sentence_bound", ep_id).iterrows()
-                }
-            row = corpus_cache.get(ep_id, {}).get(str(did), {}) or {}
-            corpus_out.append(
-                {
-                    "chunk_id": str(did),
-                    "score": float(
-                        d["score"] if isinstance(d, dict) else getattr(d, "score", 0.0) or 0.0
-                    ),
-                    "start_ts": float(row.get("start_ts", 0.0)),
-                    "end_ts": float(row.get("end_ts", 0.0)),
-                    "text": row.get("text", ""),
-                    "episode_id": ep_id,
-                }
-            )
-        # Keep top-k unique by score
-        seen = set()
-        final = []
-        for r in corpus_out:
-            if r["chunk_id"] in seen:
-                continue
-            final.append(r)
-            seen.add(r["chunk_id"])
-            if len(final) >= k:
-                break
-        total_ms = (time.perf_counter() - t0) * 1000.0
+        enriched = _enrich_many(corp_docs, corpus_cache, default_ep=None)
+
+        # Hybrid rerank on candidate pool
+        final = _hybrid_rerank(q, enriched, k, years)
+
         return {
             "retrieved": final,
-            "retrieve_ms": total_ms,
+            "retrieve_ms": (time.perf_counter() - t0) * 1000.0,
             "fallback_used": False,
             "scope": "corpus",
         }
 
-    cli = client(paths.QDRANT_URL, paths.QDRANT_API_KEY)
-
-    # 1) embed
-    qv = embed_question_fastembed(q, model_id="BAAI/bge-small-en-v1.5")
-
-    # 2) episode scope first (fast path)
+    # ---- We have an episode_id; try EPISODE first ----
     t0 = time.perf_counter()
-    ep_docs, rt_ms_ep = vector_search(
+    ep_docs, _ = vector_search(
         cli, collection=paths.INDEX_VERSION, q_vector=qv, top_k=k * 3, episode_id=ep
     )
-    chunks_df = load_chunks_df("sentence_bound", ep)
-    ep_res = _enrich(ep_docs, chunks_df, ep)[:k]
+
+    ep_df_cache: dict[str, dict] = {}
+    ep_df_cache[ep] = {
+        str(row["chunk_id"]): row.to_dict() for _, row in _safe_load_chunks_df(ep).iterrows()
+    }
+    ep_out = _enrich_many(ep_docs, ep_df_cache, default_ep=ep)
+
+    # Hybrid rerank inside episode
+    ep_res = _hybrid_rerank(q, ep_out, k, years)
     took_ms = (time.perf_counter() - t0) * 1000.0
 
+    # If strict episode scope, return immediately
     if scope == "episode":
         return {
             "retrieved": ep_res,
@@ -229,7 +262,7 @@ def rag_search(args: RagSearchArgs) -> dict[str, Any]:
             "scope": "episode",
         }
 
-    # 3) decide to broaden in "auto" if overlap is weak
+    # Decide to broaden in auto if overlap is weak, or if scope == corpus
     has_overlap = any(_overlap(q, r.get("text", "")) > 0 for r in ep_res)
     need_broaden = (scope == "corpus") or (scope == "auto" and not has_overlap)
 
@@ -241,47 +274,15 @@ def rag_search(args: RagSearchArgs) -> dict[str, Any]:
             "scope": "episode",
         }
 
-    # 4) corpus-wide pass
+    # ---- Corpus-wide fallback (then hybrid rerank) ----
     t1 = time.perf_counter()
-    corp_docs, rt_ms_corp = vector_search(
+    corp_docs, _ = vector_search(
         cli, collection=paths.INDEX_VERSION, q_vector=qv, top_k=k * 6, episode_id=None
     )
-    # enriching requires the right DF per episode; make a quick cache
-    df_cache: dict[str, dict] = {}
-    out: list[dict] = []
-    for d in corp_docs:
-        did = d["id"] if isinstance(d, dict) else getattr(d, "id", "")
-        payload = d.get("payload", {}) if isinstance(d, dict) else getattr(d, "payload", {}) or {}
-        ep_id = str(payload.get("episode_id", ep))
-        if ep_id not in df_cache:
-            df_cache[ep_id] = {
-                str(row["chunk_id"]): row.to_dict()
-                for _, row in load_chunks_df("sentence_bound", ep_id).iterrows()
-            }
-        row = df_cache[ep_id].get(str(did), {}) or {}
-        out.append(
-            {
-                "chunk_id": str(did),
-                "score": float(
-                    d["score"] if isinstance(d, dict) else getattr(d, "score", 0.0) or 0.0
-                ),
-                "start_ts": float(row.get("start_ts", 0.0)),
-                "end_ts": float(row.get("end_ts", 0.0)),
-                "text": row.get("text", ""),
-                "episode_id": ep_id,
-            }
-        )
+    corpus_cache_b: dict[str, dict] = {}
+    corp_out = _enrich_many(corp_docs, corpus_cache_b, default_ep=None)
 
-    # keep top-k unique by score (already sorted by qdrant)
-    seen = set()
-    final = []
-    for r in out:
-        if r["chunk_id"] in seen:
-            continue
-        final.append(r)
-        seen.add(r["chunk_id"])
-        if len(final) >= k:
-            break
-
+    final = _hybrid_rerank(q, corp_out, k, years)
     total_ms = took_ms + (time.perf_counter() - t1) * 1000.0
+
     return {"retrieved": final, "retrieve_ms": total_ms, "fallback_used": True, "scope": "corpus"}

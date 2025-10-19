@@ -38,7 +38,7 @@ def _openai_generate(question: str, context: str, model_id: str) -> str:
             resp = client.chat.completions.create(
                 model=model_id,
                 messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-                temperature=0.0,
+                temperature=0.2,
                 max_tokens=500,
             )
             out = resp.choices[0].message.content or ""

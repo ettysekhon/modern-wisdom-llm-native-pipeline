@@ -181,6 +181,6 @@ NOTES.md
 .dlt/
 
 # Artifacts
-data/duckdb/*.duckdb
 data/_backup/
 data/qdrant
+.files/

@@ -53,7 +53,6 @@ def validate_transcript_df(df: pd.DataFrame) -> list[str]:
         errs.append(f"Missing columns: {missing}")
     if not np.all(df["end_ts"] >= df["start_ts"]):
         errs.append("Found segments with end_ts < start_ts")
-    if df["text"].isna().any():
+    if bool(df["text"].isna().any()):
         errs.append("Found NA text")
-    # Tiny segment count is an FYI; keep as info, not an error.
     return errs

@@ -1,0 +1,83 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: 6334
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    container_name: phoenix
+    ports:
+      - "6006:6006"
+      - 4317:4317
+      - 9090:9090 # Optional for Prometheus
+    environment:
+      - PHOENIX_WORKING_DIR=/mnt/data
+    volumes:
+      - ./data/phoenix:/mnt/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mw-api
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ""
+      MW_LLM_PROVIDER: openai
+      DEFAULT_MODEL_ID: gpt-4o-mini
+      INDEX_VERSION: mw_chunks_live
+      MW_DATA_DIR: /app/data
+      PHOENIX_COLLECTOR_ENDPOINT: http://phoenix:6006/v1/traces
+      OTEL_SDK_DISABLED: "true"
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    volumes:
+      - ./data:/app/data:rw
+      - ./src:/app/src:ro
+      - ./spikes:/app/spikes:ro
+    depends_on:
+      - qdrant
+      - phoenix
+    ports:
+      - "8000:8000"
+    command: >
+      uvicorn modern_wisdom_rag_pipeline.api:app
+      --host 0.0.0.0 --port 8000 --reload
+
+  chainlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mw-chainlit
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ""
+      INDEX_VERSION: mw_chunks_live
+      MW_DATA_DIR: /app/data
+      MW_LLM_PROVIDER: openai
+      DEFAULT_MODEL_ID: gpt-4o-mini
+      MW_SCOPE: auto
+      MW_TOP_K: "8"
+      MW_EPISODE_ID: ""
+      PHOENIX_COLLECTOR_ENDPOINT: http://phoenix:6006/v1/traces
+      OTEL_SDK_DISABLED: "true"
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    volumes:
+      - ./data:/app/data:rw
+      - ./src:/app/src:ro
+      - ./spikes:/app/spikes:ro
+    depends_on:
+      - qdrant
+      - phoenix
+      - api
+    ports:
+      - "8001:8001"
+    command: >
+      chainlit run src/modern_wisdom_rag_pipeline/chainlit_app.py
+      --host 0.0.0.0 --port 8001 -w

@@ -2,7 +2,6 @@
   "type": "object",
   "required": [
     "question",
-    "episode_id",
     "top_k",
     "scope"
   ],
@@ -11,7 +10,10 @@
       "type": "string"
     },
     "episode_id": {
-      "type": "string"
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "top_k": {
       "type": "integer",

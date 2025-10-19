@@ -1,4 +1,15 @@
 {
-  "answer": "Step cap reached without finalization.",
-  "evidence": []
+  "answer": "In 2021, Chris emphasized a holistic view of discipline, distinguishing between discipline (which involves external factors) and self-discipline (which is internally driven). He suggested that a balance between the two is crucial for achieving long-term goals. In contrast, by 2024, Chris appears to have shifted towards a mindset that encourages embracing enjoyment and assuming positive outcomes rather than relying on worry and anxiety as motivators. This reflects a more relaxed approach to discipline, focusing on enjoyment rather than just the end result.",
+  "evidence": [
+    {
+      "episode_id": "a2099ee0-19ee-4d78-8cd8-9f8de0a7c43c",
+      "start_ts": 4432.01,
+      "end_ts": 4607.34
+    },
+    {
+      "episode_id": "ff3567e3-6f69-5a59-97b8-075d8ddd21cc",
+      "start_ts": 0.16,
+      "end_ts": 211.49
+    }
+  ]
 }

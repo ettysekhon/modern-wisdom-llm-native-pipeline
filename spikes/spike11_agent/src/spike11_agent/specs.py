@@ -15,42 +15,29 @@ def _write(name: str, obj: dict[str, Any]) -> Path:
 
 
 # ---- Tool input/output JSON Schemas ----
+
 RAG_SEARCH_IN = {
     "type": "object",
-    "required": ["question", "episode_id", "top_k", "scope"],
+    "required": ["question", "top_k", "scope"],  # episode_id is optional (can be null)
     "properties": {
         "question": {"type": "string"},
-        "episode_id": {"type": "string"},
+        "episode_id": {"type": ["string", "null"]},
         "top_k": {"type": "integer", "minimum": 1, "maximum": 50},
         "scope": {"type": "string", "enum": ["episode", "corpus", "auto"]},
     },
     "additionalProperties": False,
 }
+
 RAG_SEARCH_OUT = {
     "type": "object",
     "required": ["retrieved", "retrieve_ms", "fallback_used", "scope"],
     "properties": {
-        "retrieved": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["chunk_id", "score", "text", "episode_id", "start_ts", "end_ts"],
-                "properties": {
-                    "chunk_id": {"type": "string"},
-                    "score": {"type": "number"},
-                    "text": {"type": "string"},
-                    "episode_id": {"type": "string"},
-                    "start_ts": {"type": "number"},
-                    "end_ts": {"type": "number"},
-                },
-                "additionalProperties": True,
-            },
-        },
+        "retrieved": {"type": "array"},
         "retrieve_ms": {"type": "number"},
         "fallback_used": {"type": "boolean"},
-        "scope": {"type": "string"},
+        "scope": {"type": "string", "enum": ["episode", "corpus"]},
     },
-    "additionalProperties": False,
+    "additionalProperties": True,
 }
 
 EPISODE_LOCATOR_IN = {
@@ -62,6 +49,7 @@ EPISODE_LOCATOR_IN = {
     },
     "additionalProperties": False,
 }
+
 EPISODE_LOCATOR_OUT = {
     "type": "object",
     "required": ["episodes"],
@@ -106,6 +94,7 @@ TIMELINE_BUILDER_IN = {
     },
     "additionalProperties": False,
 }
+
 TIMELINE_BUILDER_OUT = {
     "type": "object",
     "required": ["timeline"],
@@ -134,6 +123,7 @@ SQL_DUCKDB_IN = {
     "properties": {"sql": {"type": "string"}},
     "additionalProperties": False,
 }
+
 SQL_DUCKDB_OUT = {
     "type": "object",
     "required": ["rows"],
@@ -147,6 +137,7 @@ CLIP_LINKER_IN = {
     "properties": {"episode_id": {"type": "string"}, "timestamp": {"type": "number"}},
     "additionalProperties": False,
 }
+
 CLIP_LINKER_OUT = {
     "type": "object",
     "required": ["url"],
@@ -156,15 +147,15 @@ CLIP_LINKER_OUT = {
 
 
 def write_specs() -> list[Path]:
-    paths = []
-    paths.append(_write("rag_search.in", RAG_SEARCH_IN))
-    paths.append(_write("rag_search.out", RAG_SEARCH_OUT))
-    paths.append(_write("episode_locator.in", EPISODE_LOCATOR_IN))
-    paths.append(_write("episode_locator.out", EPISODE_LOCATOR_OUT))
-    paths.append(_write("timeline_builder.in", TIMELINE_BUILDER_IN))
-    paths.append(_write("timeline_builder.out", TIMELINE_BUILDER_OUT))
-    paths.append(_write("sql_duckdb.in", SQL_DUCKDB_IN))
-    paths.append(_write("sql_duckdb.out", SQL_DUCKDB_OUT))
-    paths.append(_write("clip_linker.in", CLIP_LINKER_IN))
-    paths.append(_write("clip_linker.out", CLIP_LINKER_OUT))
-    return paths
+    out_paths = []
+    out_paths.append(_write("rag_search.in", RAG_SEARCH_IN))
+    out_paths.append(_write("rag_search.out", RAG_SEARCH_OUT))
+    out_paths.append(_write("episode_locator.in", EPISODE_LOCATOR_IN))
+    out_paths.append(_write("episode_locator.out", EPISODE_LOCATOR_OUT))
+    out_paths.append(_write("timeline_builder.in", TIMELINE_BUILDER_IN))
+    out_paths.append(_write("timeline_builder.out", TIMELINE_BUILDER_OUT))
+    out_paths.append(_write("sql_duckdb.in", SQL_DUCKDB_IN))
+    out_paths.append(_write("sql_duckdb.out", SQL_DUCKDB_OUT))
+    out_paths.append(_write("clip_linker.in", CLIP_LINKER_IN))
+    out_paths.append(_write("clip_linker.out", CLIP_LINKER_OUT))
+    return out_paths
