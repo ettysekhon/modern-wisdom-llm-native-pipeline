@@ -1,4 +1,4 @@
-# Modern Wisdom – LLM Native Pipeline
+# Modern Wisdom – AI RAG Pipeline
 
 ## Motivation and Context
 
@@ -283,4 +283,4 @@ docker compose up --build
 
 This project demonstrates a full end-to-end retrieval-augmented generation system using a real-world podcast dataset.
 Starting from raw audio, it delivers a searchable, explainable knowledge base capable of producing timestamped, evidence-linked answers.
-Each design decision was guided by empirical evaluation, simplicity, and reproducibility — making it straightforward for others to run, extend, and mark.
+Each design decision was guided by empirical evaluation, simplicity, and reproducibility — making it straightforward for others to run and extend.
