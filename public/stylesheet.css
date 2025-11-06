@@ -1,0 +1,89 @@
+/* Custom stylesheet for Modern Wisdom AI Insights */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes wipeTransition {
+    0% { 
+        opacity: 0; 
+        transform: translateY(-100%) scale(0.8);
+        filter: blur(3px);
+    }
+    30% { 
+        opacity: 0.3; 
+        transform: translateY(-50%) scale(0.85);
+        filter: blur(2px);
+    }
+    70% { 
+        opacity: 0.7; 
+        transform: translateY(10%) scale(0.95);
+        filter: blur(1px);
+    }
+    100% { 
+        opacity: 1; 
+        transform: translateY(0%) scale(1);
+        filter: blur(0);
+    }
+}
+
+@keyframes spinner-rotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Make audio players more prominent */
+.chainlit-audio {
+    margin: 1rem 0;
+    border-radius: 8px;
+    padding: 0.5rem;
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Style evidence section */
+.message-content strong {
+    color: #333;
+}
+
+/* Improve readability for light theme */
+body[data-theme="light"] {
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Add subtle shadow to messages */
+.message {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Style inline code (episode IDs) */
+code {
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+/* Add subtle animation to tool calls */
+.chainlit-tool-call {
+    animation: wipeTransition 0.6s ease-out;
+}
+
+/* Style spinner animation */
+.chainlit-spinner {
+    animation: spinner-rotate 1.5s linear infinite;
+}
+
+.step-avatar {
+  width: 50px !important;
+  height: 50px !important;
+}
+
+/* Custom logo size */
+.logo {
+  width: 150px !important;
+}
+
+/* Hide the attach files button */
+button#upload-button[role="presentation"] {
+  display: none !important;
+}

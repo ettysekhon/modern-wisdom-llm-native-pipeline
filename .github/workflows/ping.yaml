@@ -1,0 +1,14 @@
+name: Keep Fly.io App Warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"  # every 10 minutes (UTC)
+  workflow_dispatch:        # allows manual run from GitHub UI
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Curl Fly app
+        run: |
+          curl -s -o /dev/null -w "%{http_code}\n" https://modern-wisdom-rag.fly.dev/ || exit 1

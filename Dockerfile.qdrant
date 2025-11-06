@@ -1,0 +1,17 @@
+FROM qdrant/qdrant:latest
+COPY qdrant-config.yaml /qdrant/config/production.yaml
+
+RUN echo '#!/bin/sh\n\
+set -e\n\
+echo "Fixing permissions for /qdrant/storage..."\n\
+chown -R qdrant:qdrant /qdrant/storage 2>/dev/null || true\n\
+echo "Starting Qdrant..."\n\
+exec /qdrant/qdrant "$@"' > /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
+EXPOSE 6333 6334
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:6333/healthz || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]

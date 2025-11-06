@@ -12,10 +12,13 @@ From ingestion of podcast metadata, through transcription, chunking, embedding, 
 The final solution supports:
 
 * **Natural language search** across episodes and years.
-* **Comparisons over time** (e.g. a guest’s views in 2021 vs 2024).
+* **Comparisons over time** (e.g. a guest's views in 2021 vs 2024).
 * **Clip linking** directly to transcript timestamps.
 * **Evaluation and monitoring** with Phoenix.
 * **Reproducible, containerised deployment**.
+
+![Modern Wisdom RAG Application](docs/screenshots/the_app.png)
+![Modern Wisdom RAG Application Answer](docs/screenshots/the_app_answer.png)
 
 ---
 
@@ -66,8 +69,12 @@ modern-wisdom-llm-native-pipeline/
 ├── src/modern_wisdom_rag_pipeline/
 │   ├── api.py                           # FastAPI app for programmatic access
 │   ├── chainlit_app.py                  # Chainlit conversational UI
-│   ├── main.py                          # Entry point
-│   └── ...                              # Utilities and tools
+│   ├── agent.py                         # Constrained agent with tool orchestration
+│   ├── tools.py                         # RAG search with hybrid reranking
+│   ├── tools_constrained.py             # Validated tool wrappers
+│   ├── qdrant_ops.py                    # Collection and alias management
+│   ├── cli.py                           # Embedding management CLI
+│   └── ...                              # Core utilities (paths, tracing, generator, etc.)
 │
 ├── infra/                               # Optional standalone docker-compose files
 ├── Dockerfile                           # Multi-stage build
@@ -157,13 +164,7 @@ Phoenix dashboard accessible at `http://localhost:6006`.
 
 Implements a **constrained agent** that plans tool usage (RAG search, timeline builder, clip linker, etc.).
 Safely executes multi-step reasoning capped at 6 steps.
-CLI:
-
-```bash
-uv run run-spike11 deep-agent --question "Compare Chris’s views on discipline in 2021 vs 2024"
-```
-
-Result: Coherent, evidence-linked comparison with timestamps and clip URLs.
+The agent is now integrated into the production application and accessible via the Chainlit UI or FastAPI.
 
 ---
 
@@ -191,54 +192,43 @@ Result: Coherent, evidence-linked comparison with timestamps and clip URLs.
 * uv ≥ 0.4
 * Python ≥ 3.11 (if running locally)
 
-### Quick Start
+### Setup
 
 ```bash
 uv sync
 export OPENAI_API_KEY=sk-your-real-openai-key
-```
-
-```bash
 docker compose up
 ```
 
-Services:
+### Initialise Embeddings
 
-* Qdrant: [http://localhost:6333](http://localhost:6333)
-* Phoenix: [http://localhost:6006](http://localhost:6006)
-* API (FastAPI docs): [http://localhost:8000/docs](http://localhost:8000/docs)
-* Chainlit UI: [http://localhost:8001](http://localhost:8001)
-
-### Summary of steps to backfill (index initialisation - create collection + alias) almost 1000 episodes - chunk, embed and upsert into Qdrant
-
-As all the chunks and embeddings have already been created (located in the `data` directory). You only need to upsert the embeddings to Qdrant. Note this can take over 30 minutes.
+The production application logic has been lifted and shifted from the spikes into `src/modern_wisdom_rag_pipeline/`. To initialise the vector store with embeddings:
 
 ```bash
-EMB_V="BAAI/bge-small-en-v1.5"
-INDEX_VERSION="mw_chunks_live"
-
-cat data/tmp/epids_2018_2025.txt | while read -r EID; do
-  echo "Upserting vectors for $EID"
-  uv run run-spike5 upsert \
-    --episode-id "$EID" \
-    --method sentence_bound \
-    --emb-v "$EMB_V" \
-    --set-live \
-    --live-alias "$INDEX_VERSION"
-done
+uv run mw-rag upsert-batch \
+  --episode-list data/tmp/epids_2018_2025.txt \
+  --emb-v "BAAI/bge-small-en-v1.5" \
+  --set-live
 ```
 
-### 4) Use the UI
+This replaces the manual loop process. The CLI provides commands for managing embeddings:
 
-![Chainlit](docs/screenshots/chainlit_sample.png)
+* `mw-rag upsert` – Upsert a single episode
+* `mw-rag upsert-batch` – Batch upsert from file
+* `mw-rag check` – Inspect collection status
+* `mw-rag list` – List all collections
+* `mw-rag clear` – Clear a collection
 
-Open **Chainlit** at [http://localhost:8001](http://localhost:8001) and ask similar questions.
+### Services and Endpoints
 
-Open **API docs** at [http://localhost:8000/docs](http://localhost:8000/docs) for programmatic calls.
+Once running, access:
 
-Open **Phoenix** at [http://localhost:6006](http://localhost:6006) to see traces and metrics.
-
-Open **Qdrant** at [http://localhost:6333/dashboard](http://localhost:6333/dashboard) to view vector embeddings, collections, and their details.
+* **Chainlit UI**: [http://localhost:8001](http://localhost:8001) – Conversational interface for querying episodes
+* **FastAPI Docs**: [http://localhost:8000/docs](http://localhost:8000/docs) – Interactive API documentation
+* **API Info**: [http://localhost:8000/info](http://localhost:8000/info) – Service information
+* **Health Check**: [http://localhost:8000/healthz](http://localhost:8000/healthz) – Health endpoint
+* **Phoenix Dashboard**: [http://localhost:6006](http://localhost:6006) – Traces and observability
+* **Qdrant Dashboard**: [http://localhost:6333/dashboard](http://localhost:6333/dashboard) – Vector store management
 
 ---
 
@@ -266,8 +256,8 @@ Open **Qdrant** at [http://localhost:6333/dashboard](http://localhost:6333/dashb
 * **All dependencies pinned** in `uv.lock`.
 * **Data persisted** under `./data` (bind-mounted volumes).
 * **Docker Compose** launches Qdrant, Phoenix, FastAPI, and Chainlit with one command.
-* **Local evaluation notebooks** validate each stage.
-* **Agent CLI** provides end-to-end testing and demo questions.
+* **Production application** in `src/modern_wisdom_rag_pipeline/` (logic migrated from spikes).
+* **Legacy spikes** remain in `spikes/` for reference; install via `uv sync --extra legacy-spikes` if needed.
 
 To rebuild everything cleanly:
 
@@ -276,6 +266,74 @@ docker compose down -v
 uv sync --frozen
 docker compose up --build
 ```
+
+---
+
+## Production Deployment (Fly.io)
+
+The system is deployed to Fly.io as three separate applications:
+
+* **Vector database** – Qdrant with persistent volumes
+* **Observability dashboard** – Phoenix (optional)
+* **Main application** – Chainlit UI + FastAPI
+
+**Purpose:** Separate apps enable independent scaling, updates, and resource allocation.
+**Rationale:** Qdrant benefits from persistent volumes pinned to specific hosts; the main app can scale horizontally without affecting the vector store.
+
+**Note:** App names on Fly.io must be globally unique. Replace the example names below with your own (e.g., `your-name-qdrant`, `your-name-phoenix`, `your-name-rag`), and update the corresponding Flycast URLs in `fly.toml` environment variables (e.g., `QDRANT_URL = "http://your-app-name-qdrant.flycast:6333"`).
+
+### Quick Deploy
+
+```bash
+# Deploy Qdrant (create volume first)
+# Replace 'modern-wisdom-qdrant' with your unique app name
+fly apps create modern-wisdom-qdrant
+fly volumes create qdrant_data --app modern-wisdom-qdrant --size 10 --region iad
+# Allocate Flycast private IPv6 address (required for Flycast networking)
+fly ips allocate-v6 --private --app modern-wisdom-qdrant
+fly deploy --config fly.qdrant.toml
+
+# Deploy Phoenix (optional)
+# Replace 'modern-wisdom-phoenix' with your unique app name
+fly apps create modern-wisdom-phoenix
+fly volumes create phoenix_data --app modern-wisdom-phoenix --size 3 --region iad
+# Allocate Flycast private IPv6 address (required for Flycast networking)
+fly ips allocate-v6 --private --app modern-wisdom-phoenix
+fly deploy --config fly.phoenix.toml
+
+# Deploy main app
+# Replace 'modern-wisdom-rag' with your unique app name
+fly apps create modern-wisdom-rag
+fly secrets set OPENAI_API_KEY=sk-your-key-here --app modern-wisdom-rag
+fly deploy --config fly.toml
+```
+
+### Post-Deployment
+
+After deployment, upsert embeddings to make episodes searchable:
+
+```bash
+# Replace with your actual Qdrant app URL
+export QDRANT_URL="https://your-app-name-qdrant.fly.dev"
+export QDRANT_API_KEY=your-actual-api-key
+uv run mw-rag upsert-batch \
+  --episode-list data/tmp/epids_2018_2025.txt \
+  --emb-v "BAAI/bge-small-en-v1.5" \
+  --set-live
+```
+
+**Note:** Initial upsert takes ~30+ minutes for ~1000 episodes.
+
+### Access Points
+
+Replace app names with your own:
+
+* **Chainlit UI**: `https://your-app-name-rag.fly.dev`
+* **FastAPI Docs**: `https://your-app-name-rag.fly.dev/docs`
+* **Qdrant Dashboard**: `https://your-app-name-qdrant.fly.dev/dashboard#/collections`
+* **Phoenix Dashboard**: `https://your-app-name-phoenix.fly.dev/projects`
+
+Apps communicate via **Flycast** private networking (`http://<app-name>.flycast:<port>`) for internal communication. The main app connects to Qdrant using `http://your-app-name-qdrant.flycast:6333`. Public HTTPS URLs are available as an alternative if Flycast connectivity issues occur.
 
 ---
 

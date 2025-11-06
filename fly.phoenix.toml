@@ -1,0 +1,38 @@
+# Fly.io configuration for Phoenix (separate app, optional)
+# Deploy with: fly deploy --config fly.phoenix.toml
+
+app = "modern-wisdom-phoenix"
+primary_region = "lhr"
+
+[build]
+  dockerfile = "Dockerfile.phoenix"
+
+[env]
+  PHOENIX_WORKING_DIR = "/mnt/data"
+
+[[services]]
+  internal_port = 6006
+  protocol = "tcp"
+  processes = ["app"]
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    # Note: force_https removed to allow Flycast internal connections
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+[[mounts]]
+  source = "phoenix_data"
+  destination = "/mnt/data"
+
+[vm]
+  memory_mb = 1024
+  cpu_kind = "shared"
+  cpus = 1
+
+[deploy]
+  strategy = "immediate"
+

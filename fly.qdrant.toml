@@ -1,0 +1,80 @@
+# Fly.io configuration for Qdrant Vector Database
+# Deploy with: fly deploy --config fly.qdrant.toml
+# 
+# Prerequisites:
+# 1. Create volume: fly volumes create qdrant_data --region lhr --size 10
+# 2. Set API key: fly secrets set QDRANT_API_KEY=your-secure-api-key-here --app modern-wisdom-qdrant
+
+app = "modern-wisdom-qdrant"
+primary_region = "lhr"
+
+# Build configuration
+[build]
+  dockerfile = "Dockerfile.qdrant"
+
+# Environment variables
+[env]
+  QDRANT__SERVICE__GRPC_PORT = "6334"
+  QDRANT__SERVICE__HTTP_PORT = "6333"
+  QDRANT__SERVICE__HOST = "::"  # Listen on both IPv4 and IPv6
+  QDRANT__LOG_LEVEL = "INFO"
+  QDRANT__TELEMETRY_DISABLED = "true"
+
+# HTTP service configuration for external access
+[[services]]
+  internal_port = 6333
+  protocol = "tcp"
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  # HTTP port configuration
+  # Note: force_https removed to allow Flycast internal connections
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  # Health checks
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 100
+    soft_limit = 80
+
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "10s"
+    grace_period = "30s"
+
+  [[services.http_checks]]
+    interval = "30s"
+    timeout = "10s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/healthz"
+    protocol = "http"
+
+# Volume mount for persistent storage
+[[mounts]]
+  source = "qdrant_data"
+  destination = "/qdrant/storage"
+  initial_size = "10gb"
+
+# VM resources
+[vm]
+  memory_mb = 2048
+  cpu_kind = "shared"
+  cpus = 2
+
+# Deployment strategy
+[deploy]
+  strategy = "immediate"
+  max_unavailable = 1
+
+# Metrics (optional)
+[metrics]
+  port = 6333
+  path = "/metrics"

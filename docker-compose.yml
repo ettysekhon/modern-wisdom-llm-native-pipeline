@@ -35,12 +35,11 @@ services:
       INDEX_VERSION: mw_chunks_live
       MW_DATA_DIR: /app/data
       PHOENIX_COLLECTOR_ENDPOINT: http://phoenix:6006/v1/traces
-      OTEL_SDK_DISABLED: "true"
+      PHOENIX_PROJECT_NAME: mw-rag
       OPENAI_API_KEY: ${OPENAI_API_KEY}
     volumes:
       - ./data:/app/data:rw
       - ./src:/app/src:ro
-      - ./spikes:/app/spikes:ro
     depends_on:
       - qdrant
       - phoenix
@@ -48,7 +47,7 @@ services:
       - "8000:8000"
     command: >
       uvicorn modern_wisdom_rag_pipeline.api:app
-      --host 0.0.0.0 --port 8000 --reload
+      --host 0.0.0.0 --port 8000
 
   chainlit:
     build:
@@ -66,12 +65,12 @@ services:
       MW_TOP_K: "8"
       MW_EPISODE_ID: ""
       PHOENIX_COLLECTOR_ENDPOINT: http://phoenix:6006/v1/traces
-      OTEL_SDK_DISABLED: "true"
+      PHOENIX_PROJECT_NAME: mw-rag
+      PYTHONPATH: /app/src
       OPENAI_API_KEY: ${OPENAI_API_KEY}
     volumes:
       - ./data:/app/data:rw
       - ./src:/app/src:ro
-      - ./spikes:/app/spikes:ro
     depends_on:
       - qdrant
       - phoenix

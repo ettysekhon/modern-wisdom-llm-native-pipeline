@@ -1,0 +1,43 @@
+service:
+  # Bind to all interfaces (0.0.0.0 for IPv4 and :: for IPv6)
+  # This allows both public access and internal 6PN access
+  host: "::"
+  http_port: 6333
+  grpc_port: 6334
+  
+  # Enable CORS for web clients (adjust origins as needed)
+  enable_cors: true
+  
+  # API key will be set via environment variable QDRANT__SERVICE__API_KEY
+  # Set this as a Fly.io secret: fly secrets set QDRANT_API_KEY=your-secret-key
+
+# Storage configuration for performance
+storage:
+  # Storage path (will be persisted via Fly volume)
+  storage_path: /qdrant/storage
+  
+  # Performance settings
+  performance:
+    # Use all available CPU cores (0 = auto-detect)
+    max_search_threads: 0
+    max_optimization_threads: 0
+  
+  # HNSW index configuration for vector search
+  hnsw_index:
+    # Number of edges per node in the index graph
+    # Higher = more accurate but uses more memory
+    m: 16
+    
+    # Size of the dynamic candidate list
+    # Higher = more accurate indexing but slower
+    ef_construct: 100
+    
+    # Full scan threshold in KB
+    # When the result set is smaller than this, use full scan instead of HNSW
+    full_scan_threshold_kb: 10000
+
+# Logging configuration
+log_level: INFO
+
+# Telemetry (disable for production privacy)
+telemetry_disabled: true
